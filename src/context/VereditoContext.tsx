@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
   onAuthStateChanged,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
   type User,
@@ -26,10 +27,13 @@ import {
   OperationType,
 } from '../firebase';
 import {
+  ADMIN_AUTH_DOMAIN,
   LIMITS,
+  MASTER_ADMIN_EMAIL,
   STARTER_GAMES,
   sanitizeAvatarUrl,
   sanitizeOptionalUrl,
+  type AdminGrant,
   type Game,
   type GameInput,
   type GameWithStats,
@@ -37,6 +41,7 @@ import {
   type ReviewComment,
   type ReviewInput,
   type ReviewReaction,
+  type UserBan,
   type UserProfile,
 } from '../types';
 
@@ -56,8 +61,17 @@ interface VereditoContextValue {
   dataLoading: boolean;
   signingIn: boolean;
   authError: string | null;
+  adminAuthError: string | null;
   profile: UserProfile | null;
+  profileSetupPending: boolean;
+  isMasterAdmin: boolean;
   isAdmin: boolean;
+  isBanned: boolean;
+  currentBan: UserBan | null;
+  admins: AdminGrant[];
+  adminUids: Set<string>;
+  bans: UserBan[];
+  bansByUid: Record<string, UserBan>;
   members: UserProfile[];
   membersById: Record<string, UserProfile>;
   games: Game[];
@@ -68,6 +82,7 @@ interface VereditoContextValue {
   commentsByReview: Record<string, ReviewComment[]>;
   reactionsByReview: Record<string, ReviewReaction[]>;
   signInWithGoogle: () => Promise<void>;
+  signInWithAdminCredentials: (usernameOrEmail: string, password: string) => Promise<void>;
   signOutUser: () => Promise<void>;
   updateUserProfile: (data: {
     displayName: string;
@@ -84,6 +99,11 @@ interface VereditoContextValue {
   deleteComment: (commentId: string) => Promise<void>;
   toggleReaction: (reviewId: string) => Promise<void>;
   seedStarterGames: () => Promise<void>;
+  grantAdmin: (targetUid: string, displayName: string) => Promise<void>;
+  revokeAdmin: (targetUid: string) => Promise<void>;
+  banUser: (targetUid: string, displayName: string, reason: string) => Promise<void>;
+  unbanUser: (targetUid: string) => Promise<void>;
+  purgeMemberContent: (targetUid: string) => Promise<{ reviewsDeleted: number; commentsDeleted: number }>;
 }
 
 const VereditoContext = createContext<VereditoContextValue | null>(null);
@@ -93,9 +113,13 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   const [authReady, setAuthReady] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [adminAuthError, setAdminAuthError] = useState<string | null>(null);
   const [dataLoading, setDataLoading] = useState(false);
+  const [profileSetupPending, setProfileSetupPending] = useState(false);
 
   const [members, setMembers] = useState<UserProfile[]>([]);
+  const [admins, setAdmins] = useState<AdminGrant[]>([]);
+  const [bans, setBans] = useState<UserBan[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [comments, setComments] = useState<ReviewComment[]>([]);
@@ -105,6 +129,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
       setUser(nextUser);
       setAuthReady(true);
+      setProfileSetupPending(false);
 
       if (nextUser) {
         const userRef = doc(db, 'users', nextUser.uid);
@@ -114,26 +139,38 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
             const safeName = (
               nextUser.displayName ||
               nextUser.email?.split('@')[0] ||
-              'Amigo'
+              'Cobra'
             )
               .trim()
               .slice(0, LIMITS.DISPLAY_NAME_MAX);
-            await setDoc(userRef, {
-              uid: nextUser.uid,
-              displayName: safeName || 'Amigo',
-              photoURL: sanitizeAvatarUrl(nextUser.photoURL),
-              bio: '',
-              topFiveGames: [],
-              visibility: 'group',
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
+            try {
+              await setDoc(userRef, {
+                uid: nextUser.uid,
+                displayName: safeName || 'Cobra',
+                photoURL: sanitizeAvatarUrl(nextUser.photoURL),
+                bio: '',
+                topFiveGames: [],
+                visibility: 'group',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+            } catch (writeErr) {
+              const code = (writeErr as { code?: string })?.code || '';
+              if (code === 'permission-denied' && !nextUser.emailVerified) {
+                // Account logged in with Email/Password before being added to /admins
+                setProfileSetupPending(true);
+                return;
+              }
+              throw writeErr;
+            }
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.WRITE, `users/${nextUser.uid}`);
         }
       } else {
         setMembers([]);
+        setAdmins([]);
+        setBans([]);
         setGames([]);
         setReviews([]);
         setComments([]);
@@ -167,6 +204,26 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         setMembers(list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'users'),
+    );
+
+    const unsubAdmins = onSnapshot(
+      query(collection(db, 'admins'), where('visibility', '==', 'group')),
+      (snap) => {
+        const list = snap.docs.map((d) => d.data() as AdminGrant);
+        list.sort((a, b) => getTimeMillis(a.createdAt) - getTimeMillis(b.createdAt));
+        setAdmins(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'admins'),
+    );
+
+    const unsubBans = onSnapshot(
+      query(collection(db, 'bans'), where('visibility', '==', 'group')),
+      (snap) => {
+        const list = snap.docs.map((d) => d.data() as UserBan);
+        list.sort((a, b) => getTimeMillis(b.createdAt) - getTimeMillis(a.createdAt));
+        setBans(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'bans'),
     );
 
     const unsubGames = onSnapshot(
@@ -224,6 +281,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       unsubUsers();
+      unsubAdmins();
+      unsubBans();
       unsubGames();
       unsubReviews();
       unsubComments();
@@ -244,9 +303,39 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     return map;
   }, [members]);
 
-  const isAdmin = useMemo(() => {
-    return Boolean(user?.email === 'kaorurou@gmail.com' && user?.emailVerified);
+  const adminUids = useMemo(() => {
+    const set = new Set<string>();
+    for (const grant of admins) {
+      set.add(grant.uid);
+    }
+    return set;
+  }, [admins]);
+
+  const bansByUid = useMemo(() => {
+    const map: Record<string, UserBan> = {};
+    for (const ban of bans) {
+      map[ban.uid] = ban;
+    }
+    return map;
+  }, [bans]);
+
+  const currentBan = useMemo(() => {
+    if (!user) return null;
+    return bansByUid[user.uid] || null;
+  }, [bansByUid, user]);
+
+  const isMasterAdmin = useMemo(() => {
+    return Boolean(user?.email === MASTER_ADMIN_EMAIL && user?.emailVerified);
   }, [user]);
+
+  const isBanned = useMemo(() => {
+    return Boolean(currentBan && !isMasterAdmin);
+  }, [currentBan, isMasterAdmin]);
+
+  const isAdmin = useMemo(() => {
+    if (!user || isBanned) return false;
+    return isMasterAdmin || adminUids.has(user.uid);
+  }, [user, isMasterAdmin, adminUids, isBanned]);
 
   const gamesWithStats = useMemo<GameWithStats[]>(() => {
     const reviewsByGame = new Map<string, Review[]>();
@@ -326,6 +415,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     setAuthError(null);
+    setAdminAuthError(null);
     setSigningIn(true);
     try {
       await signInWithPopup(auth, googleProvider);
@@ -341,8 +431,70 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signInWithAdminCredentials = async (
+    usernameOrEmail: string,
+    password: string,
+  ) => {
+    setAuthError(null);
+    setAdminAuthError(null);
+
+    const cleanLogin = usernameOrEmail.trim().toLowerCase();
+    if (!cleanLogin || !password) {
+      setAdminAuthError('Informe o usuário e a senha de administrador.');
+      return;
+    }
+
+    const email = cleanLogin.includes('@')
+      ? cleanLogin
+      : `${cleanLogin}@${ADMIN_AUTH_DOMAIN}`;
+
+    setSigningIn(true);
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      const code = (error as { code?: string })?.code || '';
+      if (code === 'auth/operation-not-allowed') {
+        setAdminAuthError(
+          'Login por usuário/senha ainda não está ativado no Firebase Authentication. Ative o provedor "E-mail/senha" no console do Firebase ou entre com sua conta Google de Admin Mestre.',
+        );
+      } else if (
+        code === 'auth/invalid-credential' ||
+        code === 'auth/user-not-found' ||
+        code === 'auth/wrong-password' ||
+        code === 'auth/invalid-email'
+      ) {
+        setAdminAuthError(
+          'Credenciais inválidas ou conta ainda não criada no Firebase Authentication.',
+        );
+      } else if (code === 'auth/too-many-requests') {
+        setAdminAuthError(
+          'Muitas tentativas seguidas. Aguarde alguns minutos e tente novamente.',
+        );
+      } else {
+        setAdminAuthError(
+          'Não foi possível autenticar como administrador. Tente novamente.',
+        );
+      }
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
   const signOutUser = async () => {
+    setAuthError(null);
+    setAdminAuthError(null);
     await signOut(auth);
+  };
+
+  const getCurrentDisplayName = () => {
+    return (
+      profile?.displayName ||
+      user?.displayName ||
+      user?.email?.split('@')[0] ||
+      'Cobra'
+    )
+      .trim()
+      .slice(0, LIMITS.DISPLAY_NAME_MAX);
   };
 
   const updateUserProfile = async (data: {
@@ -351,7 +503,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     topFiveGames: string[];
     photoURL?: string;
   }) => {
-    if (!user) return;
+    if (!user || isBanned) return;
     const safeName = data.displayName.trim().slice(0, LIMITS.DISPLAY_NAME_MAX);
     if (!safeName) throw new Error('Informe um nome de exibição.');
     const safeTopFive = data.topFiveGames
@@ -378,19 +530,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const getCurrentDisplayName = () => {
-    return (
-      profile?.displayName ||
-      user?.displayName ||
-      user?.email?.split('@')[0] ||
-      'Amigo'
-    )
-      .trim()
-      .slice(0, LIMITS.DISPLAY_NAME_MAX);
-  };
-
   const createGame = async (input: GameInput): Promise<string> => {
-    if (!user) throw new Error('Faça login para cadastrar um jogo.');
+    if (!user || isBanned) throw new Error('Faça login para cadastrar um jogo.');
     const gameId = createSafeId('game');
     const cleanDate = input.releaseDate.trim();
     const year = Number.parseInt(cleanDate.slice(0, 4), 10);
@@ -433,7 +574,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateGame = async (gameId: string, input: GameInput) => {
-    if (!user) throw new Error('Faça login para editar este jogo.');
+    if (!user || isBanned) throw new Error('Faça login para editar este jogo.');
     const cleanDate = input.releaseDate.trim();
     const year = Number.parseInt(cleanDate.slice(0, 4), 10);
     const releaseYear = Math.min(
@@ -468,9 +609,27 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteGame = async (gameId: string) => {
-    if (!user) return;
+    if (!user || isBanned) return;
     const path = `games/${gameId}`;
     try {
+      if (isAdmin) {
+        const relatedReviews = reviews.filter((r) => r.gameId === gameId);
+        const relatedReviewIds = new Set(relatedReviews.map((r) => r.id));
+        const relatedComments = comments.filter(
+          (c) => c.gameId === gameId || relatedReviewIds.has(c.reviewId),
+        );
+        const relatedReactions = reactions.filter((r) =>
+          relatedReviewIds.has(r.reviewId),
+        );
+
+        await Promise.all([
+          ...relatedComments.map((c) => deleteDoc(doc(db, 'comments', c.id))),
+          ...relatedReactions.map((r) => deleteDoc(doc(db, 'reactions', r.id))),
+        ]);
+        await Promise.all(
+          relatedReviews.map((r) => deleteDoc(doc(db, 'reviews', r.id))),
+        );
+      }
       await deleteDoc(doc(db, 'games', gameId));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
@@ -478,7 +637,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   };
 
   const saveReview = async (game: Game, input: ReviewInput) => {
-    if (!user) throw new Error('Faça login para publicar sua crítica.');
+    if (!user || isBanned) throw new Error('Faça login para publicar sua crítica.');
     const reviewId = `${game.id}_${user.uid}`;
     const reviewRef = doc(db, 'reviews', reviewId);
     const path = `reviews/${reviewId}`;
@@ -533,9 +692,17 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteReview = async (reviewId: string) => {
-    if (!user) return;
+    if (!user || isBanned) return;
     const path = `reviews/${reviewId}`;
     try {
+      if (isAdmin) {
+        const relatedComments = comments.filter((c) => c.reviewId === reviewId);
+        const relatedReactions = reactions.filter((r) => r.reviewId === reviewId);
+        await Promise.all([
+          ...relatedComments.map((c) => deleteDoc(doc(db, 'comments', c.id))),
+          ...relatedReactions.map((r) => deleteDoc(doc(db, 'reactions', r.id))),
+        ]);
+      }
       await deleteDoc(doc(db, 'reviews', reviewId));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
@@ -543,7 +710,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   };
 
   const addComment = async (reviewId: string, gameId: string, body: string) => {
-    if (!user) return;
+    if (!user || isBanned) return;
     const cleanBody = body.trim().slice(0, LIMITS.COMMENT_BODY_MAX);
     if (!cleanBody) return;
 
@@ -566,7 +733,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteComment = async (commentId: string) => {
-    if (!user) return;
+    if (!user || isBanned) return;
     const path = `comments/${commentId}`;
     try {
       await deleteDoc(doc(db, 'comments', commentId));
@@ -576,7 +743,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleReaction = async (reviewId: string) => {
-    if (!user) return;
+    if (!user || isBanned) return;
     const reactionId = `${reviewId}_${user.uid}`;
     const path = `reactions/${reactionId}`;
     const alreadyExists = (reactionsByReview[reviewId] || []).some(
@@ -602,9 +769,108 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   };
 
   const seedStarterGames = async () => {
-    if (!user) return;
+    if (!user || isBanned) return;
     for (const starter of STARTER_GAMES) {
       await createGame(starter);
+    }
+  };
+
+  const grantAdmin = async (targetUid: string, displayName: string) => {
+    if (!user || !isAdmin) throw new Error('Apenas administradores podem conceder privilégios.');
+    const cleanUid = targetUid.trim();
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(cleanUid)) {
+      throw new Error('UID inválido. Informe um identificador válido do Firebase Auth.');
+    }
+    const cleanName = (displayName.trim() || 'Admin').slice(0, LIMITS.DISPLAY_NAME_MAX);
+    const path = `admins/${cleanUid}`;
+    try {
+      await setDoc(doc(db, 'admins', cleanUid), {
+        uid: cleanUid,
+        displayName: cleanName,
+        role: 'admin' as const,
+        grantedBy: user.uid,
+        grantedByName: getCurrentDisplayName(),
+        visibility: 'group' as const,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  };
+
+  const revokeAdmin = async (targetUid: string) => {
+    if (!user || !isAdmin) throw new Error('Apenas administradores podem revogar privilégios.');
+    if (targetUid === user.uid) {
+      throw new Error('Você não pode remover seus próprios privilégios de admin.');
+    }
+    const path = `admins/${targetUid}`;
+    try {
+      await deleteDoc(doc(db, 'admins', targetUid));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const banUser = async (targetUid: string, displayName: string, reason: string) => {
+    if (!user || !isAdmin) throw new Error('Apenas administradores podem banir membros.');
+    if (targetUid === user.uid) {
+      throw new Error('Você não pode banir a própria conta.');
+    }
+    const cleanName = (displayName.trim() || 'Membro').slice(0, LIMITS.DISPLAY_NAME_MAX);
+    const cleanReason = reason.trim().slice(0, LIMITS.BAN_REASON_MAX);
+    const path = `bans/${targetUid}`;
+    try {
+      await setDoc(doc(db, 'bans', targetUid), {
+        uid: targetUid,
+        displayName: cleanName,
+        reason: cleanReason,
+        bannedBy: user.uid,
+        bannedByName: getCurrentDisplayName(),
+        visibility: 'group' as const,
+        createdAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  };
+
+  const unbanUser = async (targetUid: string) => {
+    if (!user || !isAdmin) throw new Error('Apenas administradores podem desbanir membros.');
+    const path = `bans/${targetUid}`;
+    try {
+      await deleteDoc(doc(db, 'bans', targetUid));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const purgeMemberContent = async (targetUid: string) => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem limpar publicações.');
+    }
+    const memberReviews = reviews.filter((r) => r.authorId === targetUid);
+    const memberReviewIds = new Set(memberReviews.map((r) => r.id));
+    const commentsToDelete = comments.filter(
+      (c) => c.authorId === targetUid || memberReviewIds.has(c.reviewId),
+    );
+    const reactionsToDelete = reactions.filter(
+      (r) => r.userId === targetUid || memberReviewIds.has(r.reviewId),
+    );
+
+    try {
+      await Promise.all([
+        ...commentsToDelete.map((c) => deleteDoc(doc(db, 'comments', c.id))),
+        ...reactionsToDelete.map((r) => deleteDoc(doc(db, 'reactions', r.id))),
+      ]);
+      await Promise.all(
+        memberReviews.map((r) => deleteDoc(doc(db, 'reviews', r.id))),
+      );
+      return {
+        reviewsDeleted: memberReviews.length,
+        commentsDeleted: commentsToDelete.length,
+      };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `purge/${targetUid}`);
     }
   };
 
@@ -616,8 +882,17 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         dataLoading,
         signingIn,
         authError,
+        adminAuthError,
         profile,
+        profileSetupPending,
+        isMasterAdmin,
         isAdmin,
+        isBanned,
+        currentBan,
+        admins,
+        adminUids,
+        bans,
+        bansByUid,
         members,
         membersById,
         games,
@@ -628,6 +903,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         commentsByReview,
         reactionsByReview,
         signInWithGoogle,
+        signInWithAdminCredentials,
         signOutUser,
         updateUserProfile,
         createGame,
@@ -639,6 +915,11 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         deleteComment,
         toggleReaction,
         seedStarterGames,
+        grantAdmin,
+        revokeAdmin,
+        banUser,
+        unbanUser,
+        purgeMemberContent,
       }}
     >
       {children}

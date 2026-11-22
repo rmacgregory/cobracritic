@@ -365,12 +365,134 @@
         "visibility",
         "createdAt"
       ]
+    },
+    "AdminGrant": {
+      "title": "AdminGrant",
+      "description": "Delegated admin privilege grant for a group member.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the member granted admin privileges."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display label of the admin member."
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"],
+          "description": "Delegated role identifier."
+        },
+        "grantedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the admin who granted this role."
+        },
+        "grantedByName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the admin who granted this role."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group-shared visibility scope."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of role grant."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "role",
+        "grantedBy",
+        "grantedByName",
+        "visibility",
+        "createdAt"
+      ]
+    },
+    "UserBan": {
+      "title": "UserBan",
+      "description": "Moderation ban record blocking a member from writing or interacting in the group.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the banned member."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the banned member."
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Optional moderation reason for the ban."
+        },
+        "bannedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the admin who issued the ban."
+        },
+        "bannedByName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the admin who issued the ban."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group-shared visibility scope."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of ban creation."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "reason",
+        "bannedBy",
+        "bannedByName",
+        "visibility",
+        "createdAt"
+      ]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
       "description": "Public group profiles for friends (no PII)."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminGrant" },
+      "description": "Delegated admin privileges managed exclusively by existing admins."
+    },
+    "/bans/{userId}": {
+      "schema": { "$ref": "#/entities/UserBan" },
+      "description": "Banned user records managed exclusively by admins."
     },
     "/games/{gameId}": {
       "schema": { "$ref": "#/entities/Game" },

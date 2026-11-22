@@ -33,6 +33,7 @@ export function ReviewCard({
   const {
     user,
     isAdmin,
+    adminUids,
     membersById,
     commentsByReview,
     reactionsByReview,
@@ -53,6 +54,7 @@ export function ReviewCard({
   const [commentText, setCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [togglingReaction, setTogglingReaction] = useState(false);
+  const [confirmDeleteReview, setConfirmDeleteReview] = useState(false);
 
   const displayTitle = game?.title || review.gameTitle;
   const displayCover = game?.coverUrl ?? review.gameCoverUrl;
@@ -139,19 +141,26 @@ export function ReviewCard({
             </div>
           )}
           <div className="min-w-0">
-            {onSelectAuthor ? (
-              <button
-                type="button"
-                onClick={() => onSelectAuthor(review.authorId)}
-                className="text-sm font-semibold text-[#F2F2EE] hover:text-[#4ADE80] transition-colors truncate block cursor-pointer"
-              >
-                {resolvedAuthorName}
-              </button>
-            ) : (
-              <p className="text-sm font-semibold text-[#F2F2EE] truncate">
-                {resolvedAuthorName}
-              </p>
-            )}
+            <div className="flex items-center gap-2 min-w-0">
+              {onSelectAuthor ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectAuthor(review.authorId)}
+                  className="text-sm font-semibold text-[#F2F2EE] hover:text-[#4ADE80] transition-colors truncate block cursor-pointer"
+                >
+                  {resolvedAuthorName}
+                </button>
+              ) : (
+                <p className="text-sm font-semibold text-[#F2F2EE] truncate">
+                  {resolvedAuthorName}
+                </p>
+              )}
+              {adminUids.has(review.authorId) && (
+                <span className="text-[10px] font-mono text-[#4ADE80] shrink-0">
+                  ADMIN
+                </span>
+              )}
+            </div>
             <p className="text-xs text-[#8C9288] flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
               <span>{formatTimestamp(review.createdAt)}</span>
               <span aria-hidden="true">·</span>
@@ -187,14 +196,33 @@ export function ReviewCard({
                   <Pencil className="w-4 h-4" />
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => deleteReview(review.id)}
-                aria-label="Excluir crítica"
-                className="p-2 text-[#8C9288] hover:text-[#F87171] transition-colors cursor-pointer"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {confirmDeleteReview ? (
+                <div className="inline-flex items-center gap-1.5 text-xs pl-1">
+                  <button
+                    type="button"
+                    onClick={() => deleteReview(review.id)}
+                    className="px-2 py-1 bg-[#B91C1C] text-white rounded font-medium cursor-pointer"
+                  >
+                    Excluir
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteReview(false)}
+                    className="text-[#8C9288] hover:text-[#F2F2EE] cursor-pointer"
+                  >
+                    Não
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteReview(true)}
+                  aria-label="Excluir crítica"
+                  className="p-2 text-[#8C9288] hover:text-[#F87171] transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           )}
         </div>

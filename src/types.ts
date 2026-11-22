@@ -1,5 +1,9 @@
 import type { Timestamp } from 'firebase/firestore';
 
+export const COBRA_LOGO_PATH = '/assets/aistudio/cobracritic_logo_png_350f92ce.png';
+export const MASTER_ADMIN_EMAIL = 'kaorurou@gmail.com';
+export const ADMIN_AUTH_DOMAIN = 'cobracritic.local';
+
 export const LIMITS = {
   DISPLAY_NAME_MAX: 80,
   BIO_MAX: 240,
@@ -8,6 +12,7 @@ export const LIMITS = {
   AVATAR_DATA_URL_MAX: 65000,
   TOP_FIVE_MAX: 5,
   TOP_FIVE_TITLE_MAX: 120,
+  BAN_REASON_MAX: 300,
   GAME_TITLE_MAX: 120,
   DEVELOPER_MAX: 100,
   SYNOPSIS_MAX: 1200,
@@ -145,6 +150,26 @@ export interface ReviewReaction {
   userId: string;
   userName: string;
   type: 'agree';
+  visibility: 'group';
+  createdAt?: Timestamp | null;
+}
+
+export interface AdminGrant {
+  uid: string;
+  displayName: string;
+  role: 'admin';
+  grantedBy: string;
+  grantedByName: string;
+  visibility: 'group';
+  createdAt?: Timestamp | null;
+}
+
+export interface UserBan {
+  uid: string;
+  displayName: string;
+  reason: string;
+  bannedBy: string;
+  bannedByName: string;
   visibility: 'group';
   createdAt?: Timestamp | null;
 }
@@ -302,7 +327,7 @@ export function sanitizeAvatarUrl(raw: string | null | undefined): string {
 export function resolveAssetUrl(raw: string | null | undefined): string {
   if (!raw) return '';
   const trimmed = raw.trim();
-  if (trimmed.startsWith('/src/assets/')) {
+  if (trimmed.startsWith('/src/assets/') || trimmed.startsWith('/assets/')) {
     const base = import.meta.env.BASE_URL || './';
     const normalizedBase = base.endsWith('/') ? base : `${base}/`;
     return `${normalizedBase}${trimmed.slice(1)}`;
@@ -353,4 +378,4 @@ export const STARTER_GAMES: GameInput[] = [
   },
 ];
 
-export type ActiveTab = 'catalog' | 'feed' | 'ranking' | 'members' | 'profile';
+export type ActiveTab = 'catalog' | 'feed' | 'ranking' | 'members' | 'profile' | 'admin';

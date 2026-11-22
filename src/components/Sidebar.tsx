@@ -4,12 +4,19 @@ import {
   Gamepad2,
   LayoutGrid,
   MessageSquareText,
+  Shield,
   User,
   Users,
   X,
 } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
-import { GENRES, PLATFORMS, type ActiveTab } from '../types';
+import {
+  COBRA_LOGO_PATH,
+  GENRES,
+  PLATFORMS,
+  resolveAssetUrl,
+  type ActiveTab,
+} from '../types';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -32,7 +39,16 @@ export function Sidebar({
   onSelectGenre,
   onSelectPlatform,
 }: SidebarProps) {
-  const { user, profile, gamesWithStats, reviews, members } = useVeredito();
+  const {
+    user,
+    profile,
+    isAdmin,
+    isMasterAdmin,
+    gamesWithStats,
+    reviews,
+    members,
+    bans,
+  } = useVeredito();
 
   const genreCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -73,6 +89,16 @@ export function Sidebar({
     { id: 'ranking', label: 'Ranking', icon: Award },
     { id: 'members', label: 'Membros', icon: Users, count: members.length },
     { id: 'profile', label: 'Meu Perfil', icon: User },
+    ...(isAdmin
+      ? [
+          {
+            id: 'admin' as const,
+            label: 'Painel Admin',
+            icon: Shield,
+            count: bans.length > 0 ? bans.length : undefined,
+          },
+        ]
+      : []),
   ];
 
   const handleNavClick = (tab: ActiveTab) => {
@@ -92,20 +118,25 @@ export function Sidebar({
 
   const sidebarContent = (
     <div className="flex flex-col h-full bg-[#121412] border-r border-[#232723] text-[#F2F2EE]">
-      {/* Brand Header */}
-      <div className="h-16 px-5 border-b border-[#232723] flex items-center justify-between gap-3 shrink-0">
+      {/* Brand Header with CobraCritic Logo */}
+      <div className="h-16 px-4 border-b border-[#232723] flex items-center justify-between gap-2 shrink-0">
         <button
           type="button"
           onClick={() => handleNavClick('catalog')}
-          className="font-serif text-xl font-semibold tracking-tight text-[#F2F2EE] whitespace-nowrap shrink-0 cursor-pointer hover:text-[#4ADE80] transition-colors"
+          aria-label="CobraCritic — Ir para o catálogo"
+          className="flex items-center min-w-0 flex-1 cursor-pointer focus:outline-none"
         >
-          CobraCritic
+          <img
+            src={resolveAssetUrl(COBRA_LOGO_PATH)}
+            alt="CobraCritic"
+            className="h-7 w-auto max-w-[196px] object-contain object-left select-none"
+          />
         </button>
         <button
           type="button"
           onClick={onCloseMobile}
           aria-label="Fechar menu lateral"
-          className="lg:hidden p-1.5 text-[#90968C] hover:text-[#F2F2EE] cursor-pointer"
+          className="lg:hidden p-1.5 text-[#90968C] hover:text-[#F2F2EE] cursor-pointer shrink-0"
         >
           <X className="w-5 h-5" />
         </button>
@@ -139,7 +170,11 @@ export function Sidebar({
                 <span className="flex items-center gap-2.5 min-w-0">
                   <Icon
                     className={`w-4 h-4 shrink-0 ${
-                      isActive ? 'text-[#4ADE80]' : 'text-[#787D75]'
+                      isActive
+                        ? 'text-[#4ADE80]'
+                        : item.id === 'admin'
+                          ? 'text-[#4ADE80]/80'
+                          : 'text-[#787D75]'
                     }`}
                     strokeWidth={1.75}
                   />
@@ -264,7 +299,13 @@ export function Sidebar({
             <p className="text-xs font-semibold text-[#F2F2EE] truncate">
               {displayName}
             </p>
-            <p className="text-[11px] text-[#8C9288] truncate">Grupo dos Cobras</p>
+            <p className="text-[11px] text-[#8C9288] truncate">
+              {isMasterAdmin
+                ? 'Admin Mestre'
+                : isAdmin
+                  ? 'Administrador'
+                  : 'Grupo dos Cobras'}
+            </p>
           </div>
         </button>
       </div>

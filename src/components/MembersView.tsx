@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Search } from 'lucide-react';
+import { ArrowLeft, Ban, Search, ShieldCheck, ShieldOff, UserCheck } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
-import type { GameWithStats, Review, UserProfile } from '../types';
+import { LIMITS, type GameWithStats, type Review, type UserProfile } from '../types';
 import { ReviewCard } from './ReviewCard';
 import { ScoreBadge } from './ScoreBadge';
 
@@ -28,10 +28,26 @@ export function MembersView({
   onSelectGame,
   onEditReview,
 }: MembersViewProps) {
-  const { members, gamesWithStats, reviews, comments } = useVeredito();
+  const {
+    user,
+    isAdmin,
+    adminUids,
+    bansByUid,
+    members,
+    gamesWithStats,
+    reviews,
+    comments,
+    grantAdmin,
+    revokeAdmin,
+    banUser,
+    unbanUser,
+  } = useVeredito();
 
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<MemberSort>('reviews_desc');
+  const [showBanInput, setShowBanInput] = useState(false);
+  const [banReason, setBanReason] = useState('');
+  const [modBusy, setModBusy] = useState(false);
 
   const gamesById = useMemo(() => {
     const map = new Map<string, GameWithStats>();
@@ -144,9 +160,21 @@ export function MembersView({
               </div>
             )}
             <div className="min-w-0 space-y-2">
-              <p className="text-xs font-mono text-[#4ADE80]">
-                Membro dos Cobras
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-mono text-[#4ADE80]">
+                  Membro dos Cobras
+                </p>
+                {adminUids.has(activeMember.uid) && (
+                  <span className="text-[11px] font-mono text-[#4ADE80] bg-[#16291D] border border-[#22543D] px-2 py-0.5 rounded">
+                    Admin
+                  </span>
+                )}
+                {bansByUid[activeMember.uid] && (
+                  <span className="text-[11px] font-mono text-[#FCA5A5] bg-[#291515] border border-[#5B2121] px-2 py-0.5 rounded">
+                    Banido
+                  </span>
+                )}
+              </div>
               <h1 className="font-serif text-3xl font-medium text-[#F2F2EE]">
                 {activeMember.displayName}
               </h1>
@@ -154,6 +182,114 @@ export function MembersView({
                 <p className="text-sm text-[#A8ACA5] leading-relaxed max-w-xl">
                   {activeMember.bio}
                 </p>
+              )}
+
+              {isAdmin && user?.uid !== activeMember.uid && (
+                <div className="pt-2 space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!bansByUid[activeMember.uid] && (
+                      adminUids.has(activeMember.uid) ? (
+                        <button
+                          type="button"
+                          disabled={modBusy}
+                          onClick={async () => {
+                            setModBusy(true);
+                            try {
+                              await revokeAdmin(activeMember.uid);
+                            } finally {
+                              setModBusy(false);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#0C0D0C] border border-[#2C312C] text-[#A8ACA5] hover:text-[#FBBF24] rounded-md cursor-pointer disabled:opacity-50"
+                        >
+                          <ShieldOff className="w-3.5 h-3.5" />
+                          <span>Remover Admin</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={modBusy}
+                          onClick={async () => {
+                            setModBusy(true);
+                            try {
+                              await grantAdmin(activeMember.uid, activeMember.displayName);
+                            } finally {
+                              setModBusy(false);
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#142218] border border-[#22543D] text-[#4ADE80] rounded-md cursor-pointer disabled:opacity-50"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          <span>Tornar Admin</span>
+                        </button>
+                      )
+                    )}
+
+                    {bansByUid[activeMember.uid] ? (
+                      <button
+                        type="button"
+                        disabled={modBusy}
+                        onClick={async () => {
+                          setModBusy(true);
+                          try {
+                            await unbanUser(activeMember.uid);
+                          } finally {
+                            setModBusy(false);
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#142218] border border-[#22543D] text-[#4ADE80] rounded-md cursor-pointer disabled:opacity-50"
+                      >
+                        <UserCheck className="w-3.5 h-3.5" />
+                        <span>Desbanir membro</span>
+                      </button>
+                    ) : (
+                      !adminUids.has(activeMember.uid) && (
+                        <button
+                          type="button"
+                          onClick={() => setShowBanInput((prev) => !prev)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#0C0D0C] border border-[#3F2222] text-[#F87171] hover:bg-[#291515] rounded-md cursor-pointer"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                          <span>Banir membro</span>
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  {showBanInput && !bansByUid[activeMember.uid] && (
+                    <div className="flex flex-wrap items-center gap-2 max-w-lg">
+                      <input
+                        type="text"
+                        maxLength={LIMITS.BAN_REASON_MAX}
+                        value={banReason}
+                        onChange={(e) => setBanReason(e.target.value)}
+                        placeholder="Motivo do banimento (opcional)..."
+                        className="flex-1 min-w-[200px] px-3 py-1.5 text-xs bg-[#0C0D0C] border border-[#3F2222] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#F87171]"
+                      />
+                      <button
+                        type="button"
+                        disabled={modBusy}
+                        onClick={async () => {
+                          setModBusy(true);
+                          try {
+                            await banUser(
+                              activeMember.uid,
+                              activeMember.displayName,
+                              banReason,
+                            );
+                            setShowBanInput(false);
+                            setBanReason('');
+                          } finally {
+                            setModBusy(false);
+                          }
+                        }}
+                        className="px-3 py-1.5 text-xs font-semibold bg-[#B91C1C] text-white rounded-md cursor-pointer disabled:opacity-50"
+                      >
+                        Confirmar ban
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -361,9 +497,21 @@ export function MembersView({
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="font-serif text-lg font-medium text-[#F2F2EE] truncate">
-                          {member.displayName}
-                        </p>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="font-serif text-lg font-medium text-[#F2F2EE] truncate">
+                            {member.displayName}
+                          </p>
+                          {adminUids.has(member.uid) && (
+                            <span className="text-[10px] font-mono text-[#4ADE80] shrink-0">
+                              ADMIN
+                            </span>
+                          )}
+                          {bansByUid[member.uid] && (
+                            <span className="text-[10px] font-mono text-[#F87171] shrink-0">
+                              BANIDO
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-[#8C9288] truncate">
                           {topFive.length > 0
                             ? `Top 1: ${topFive[0]}`

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Menu, Plus } from 'lucide-react';
+import { Ban, Check, Copy, LogOut, Menu, Plus, Shield } from 'lucide-react';
+import { AdminPanelView } from './components/AdminPanelView';
 import { AuthGate } from './components/AuthGate';
 import { CatalogView } from './components/CatalogView';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -13,7 +14,14 @@ import { ReviewFormModal } from './components/ReviewFormModal';
 import { Sidebar } from './components/Sidebar';
 import { SocialFeedView } from './components/SocialFeedView';
 import { VereditoProvider, useVeredito } from './context/VereditoContext';
-import type { ActiveTab, Game, GameWithStats, Review } from './types';
+import {
+  COBRA_LOGO_PATH,
+  resolveAssetUrl,
+  type ActiveTab,
+  type Game,
+  type GameWithStats,
+  type Review,
+} from './types';
 
 function CobraCriticShell() {
   const {
@@ -21,9 +29,16 @@ function CobraCriticShell() {
     authReady,
     signingIn,
     authError,
+    adminAuthError,
+    isAdmin,
+    isBanned,
+    currentBan,
+    profileSetupPending,
     gamesWithStats,
     members,
     signInWithGoogle,
+    signInWithAdminCredentials,
+    signOutUser,
     createGame,
     updateGame,
     saveReview,
@@ -36,6 +51,7 @@ function CobraCriticShell() {
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [copiedUid, setCopiedUid] = useState(false);
 
   const [showGameModal, setShowGameModal] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
@@ -124,9 +140,115 @@ function CobraCriticShell() {
     return (
       <AuthGate
         onSignIn={signInWithGoogle}
+        onAdminSignIn={signInWithAdminCredentials}
         signingIn={signingIn}
         authError={authError}
+        adminAuthError={adminAuthError}
       />
+    );
+  }
+
+  if (isBanned) {
+    return (
+      <div className="min-h-screen bg-[#0C0D0C] text-[#F2F2EE] flex flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md bg-[#141614] border border-[#3F2222] p-8 text-center space-y-6">
+          <img
+            src={resolveAssetUrl(COBRA_LOGO_PATH)}
+            alt="CobraCritic"
+            className="h-9 w-auto mx-auto object-contain"
+          />
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-[0.14em] text-[#F87171]">
+              <Ban className="w-4 h-4" />
+              <span>Acesso suspenso</span>
+            </div>
+            <h1 className="font-serif text-2xl font-medium text-[#F2F2EE]">
+              Sua conta foi banida do CobraCritic
+            </h1>
+            {currentBan?.reason && (
+              <p className="text-sm text-[#C8CBC4] bg-[#0C0D0C] border border-[#262A26] p-3 rounded-md mt-3">
+                Motivo: {currentBan.reason}
+              </p>
+            )}
+            <p className="text-xs text-[#8C9288] pt-1">
+              Entre em contato com um administrador do Grupo dos Cobras caso queira
+              revisar a suspensão.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={signOutUser}
+            className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-medium bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sair da conta</span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (profileSetupPending && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-[#0C0D0C] text-[#F2F2EE] flex flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-lg bg-[#141614] border border-[#262A26] p-8 space-y-5">
+          <img
+            src={resolveAssetUrl(COBRA_LOGO_PATH)}
+            alt="CobraCritic"
+            className="h-9 w-auto object-contain"
+          />
+          <div className="space-y-2">
+            <p className="text-xs font-mono uppercase tracking-[0.14em] text-[#4ADE80] flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              <span>Ativação de Conta Admin</span>
+            </p>
+            <h1 className="font-serif text-2xl font-medium text-[#F2F2EE]">
+              Falta vincular este UID como Administrador
+            </h1>
+            <p className="text-sm text-[#A8ACA5] leading-relaxed">
+              Esta conta entrou com usuário e senha, mas ainda não recebeu o selo de
+              administrador no Firestore. Copie o UID abaixo, entre com sua conta Google
+              de Admin Mestre e cole em <strong>Painel Admin → Conceder Admin por UID</strong>.
+            </p>
+          </div>
+
+          <div className="bg-[#0C0D0C] border border-[#2A2F2A] p-3 rounded-md flex items-center justify-between gap-3">
+            <code className="text-xs font-mono text-[#4ADE80] truncate">
+              {user.uid}
+            </code>
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard?.writeText(user.uid);
+                setCopiedUid(true);
+                setTimeout(() => setCopiedUid(false), 2000);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium bg-[#1D221D] text-[#F2F2EE] rounded cursor-pointer shrink-0"
+            >
+              {copiedUid ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-[#4ADE80]" />
+                  <span>Copiado</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copiar UID</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={signOutUser}
+            className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Sair e voltar para o login</span>
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -136,23 +258,27 @@ function CobraCriticShell() {
     ranking: 'Ranking',
     members: 'Membros',
     profile: 'Meu Perfil',
+    admin: 'Painel Admin',
   };
 
-  const breadcrumbTrail: string[] = [tabLabels[activeTab]];
+  const effectiveTab: ActiveTab =
+    activeTab === 'admin' && !isAdmin ? 'catalog' : activeTab;
+
+  const breadcrumbTrail: string[] = [tabLabels[effectiveTab]];
   if (selectedGame) {
     breadcrumbTrail.push(selectedGame.title);
-  } else if (activeTab === 'catalog' && selectedGenre !== 'all') {
+  } else if (effectiveTab === 'catalog' && selectedGenre !== 'all') {
     breadcrumbTrail.push(selectedGenre);
-  } else if (activeTab === 'catalog' && selectedPlatform !== 'all') {
+  } else if (effectiveTab === 'catalog' && selectedPlatform !== 'all') {
     breadcrumbTrail.push(selectedPlatform);
-  } else if (activeTab === 'members' && selectedMember) {
+  } else if (effectiveTab === 'members' && selectedMember) {
     breadcrumbTrail.push(selectedMember.displayName);
   }
 
   return (
     <div className="min-h-screen flex bg-[#0C0D0C] text-[#F2F2EE]">
       <Sidebar
-        activeTab={activeTab}
+        activeTab={effectiveTab}
         selectedGenre={selectedGenre}
         selectedPlatform={selectedPlatform}
         mobileOpen={mobileMenuOpen}
@@ -225,7 +351,7 @@ function CobraCriticShell() {
               onEditGame={handleOpenEditGame}
               onSelectAuthor={(uid) => handleSelectMember(uid)}
             />
-          ) : activeTab === 'catalog' ? (
+          ) : effectiveTab === 'catalog' ? (
             <CatalogView
               selectedPlatform={selectedPlatform}
               selectedGenre={selectedGenre}
@@ -236,24 +362,30 @@ function CobraCriticShell() {
               onOpenReview={(g) => handleOpenReview(g)}
               onGoToFeed={() => handleSelectTab('feed')}
             />
-          ) : activeTab === 'feed' ? (
+          ) : effectiveTab === 'feed' ? (
             <SocialFeedView
               onSelectGame={handleSelectGame}
               onSelectAuthor={(uid) => handleSelectMember(uid)}
               onEditReview={(game, rev) => handleOpenReview(game, rev)}
               onGoToCatalog={() => handleSelectTab('catalog')}
             />
-          ) : activeTab === 'ranking' ? (
+          ) : effectiveTab === 'ranking' ? (
             <RankingView
               onSelectGame={handleSelectGame}
               onSelectMember={(uid) => handleSelectMember(uid)}
             />
-          ) : activeTab === 'members' ? (
+          ) : effectiveTab === 'members' ? (
             <MembersView
               selectedMemberId={selectedMemberId}
               onSelectMember={handleSelectMember}
               onSelectGame={handleSelectGame}
               onEditReview={(game, rev) => handleOpenReview(game, rev)}
+            />
+          ) : effectiveTab === 'admin' ? (
+            <AdminPanelView
+              onSelectGame={handleSelectGame}
+              onEditGame={handleOpenEditGame}
+              onSelectMember={(uid) => handleSelectMember(uid)}
             />
           ) : (
             <ProfileView
@@ -265,7 +397,11 @@ function CobraCriticShell() {
 
         <footer className="border-t border-[#232723] mt-16">
           <div className="max-w-[1140px] mx-auto px-4 sm:px-8 py-6 flex flex-wrap items-center justify-between gap-4 text-xs text-[#787D75]">
-            <p className="font-serif text-sm text-[#F2F2EE]">CobraCritic</p>
+            <img
+              src={resolveAssetUrl(COBRA_LOGO_PATH)}
+              alt="CobraCritic"
+              className="h-5 w-auto object-contain opacity-85"
+            />
             <p>Grupo dos Cobras · Catálogo manual e críticas de jogos.</p>
           </div>
         </footer>
