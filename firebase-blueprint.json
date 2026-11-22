@@ -1,0 +1,392 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Public profile of a friend in the review group (strictly non-PII).",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the member."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Public display name shown on reviews and comments."
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 65000,
+          "description": "Optional HTTPS avatar URL or 300x300 cropped JPEG/WebP data URI."
+        },
+        "bio": {
+          "type": "string",
+          "maxLength": 240,
+          "description": "Short gaming profile bio."
+        },
+        "topFiveGames": {
+          "type": "array",
+          "description": "Member's Top 5 all-time favorite games (0 to 5 strings, max 120 chars each)."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group-shared visibility scope."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of profile creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last profile update."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "photoURL",
+        "bio",
+        "topFiveGames",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Game": {
+      "title": "Game",
+      "description": "A manually registered video game in the friends' shared catalog.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Game title."
+        },
+        "developer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100,
+          "description": "Game studio or developer."
+        },
+        "releaseDate": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 10,
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "Release date in YYYY-MM-DD format."
+        },
+        "releaseYear": {
+          "type": "number",
+          "description": "Release year (1970 to 2035) for quick filtering."
+        },
+        "platforms": {
+          "type": "array",
+          "description": "List of platforms (1 to 8 items)."
+        },
+        "genres": {
+          "type": "array",
+          "description": "List of genres (1 to 5 items)."
+        },
+        "synopsis": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1200,
+          "description": "Short game synopsis or notes."
+        },
+        "coverUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Local preset artwork path or external HTTPS image URL."
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the friend who registered the game."
+        },
+        "createdByName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the friend who registered the game."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group-shared visibility scope."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of game registration."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last game edit."
+        }
+      },
+      "required": [
+        "title",
+        "developer",
+        "releaseDate",
+        "releaseYear",
+        "platforms",
+        "genres",
+        "synopsis",
+        "coverUrl",
+        "createdBy",
+        "createdByName",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "A Metacritic-style score (0-100) and written critique from a friend for a registered game.",
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Reference ID of the reviewed game."
+        },
+        "gameTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Denormalized game title for feed rendering."
+        },
+        "gameCoverUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Denormalized cover URL for feed rendering."
+        },
+        "authorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the reviewer."
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the reviewer."
+        },
+        "authorPhotoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Avatar URL of the reviewer."
+        },
+        "score": {
+          "type": "number",
+          "description": "Integer score from 0 to 100."
+        },
+        "headline": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140,
+          "description": "Short verdict title for the review."
+        },
+        "body": {
+          "type": "string",
+          "minLength": 10,
+          "maxLength": 4000,
+          "description": "Full written critique."
+        },
+        "platformPlayed": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "description": "Platform on which the friend played the game."
+        },
+        "hoursPlayed": {
+          "type": "number",
+          "description": "Approximate hours played (0 to 10000)."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group-shared visibility scope."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of publication."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "gameId",
+        "gameTitle",
+        "gameCoverUrl",
+        "authorId",
+        "authorName",
+        "authorPhotoURL",
+        "score",
+        "headline",
+        "body",
+        "platformPlayed",
+        "hoursPlayed",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ReviewComment": {
+      "title": "ReviewComment",
+      "description": "A social comment posted by a friend on another friend's review.",
+      "type": "object",
+      "properties": {
+        "reviewId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Reference ID of the parent review."
+        },
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Reference ID of the associated game."
+        },
+        "authorId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the commenter."
+        },
+        "authorName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the commenter."
+        },
+        "authorPhotoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Avatar URL of the commenter."
+        },
+        "body": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "description": "Comment text."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group-shared visibility scope."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of comment creation."
+        }
+      },
+      "required": [
+        "reviewId",
+        "gameId",
+        "authorId",
+        "authorName",
+        "authorPhotoURL",
+        "body",
+        "visibility",
+        "createdAt"
+      ]
+    },
+    "ReviewReaction": {
+      "title": "ReviewReaction",
+      "description": "A friend's agreement reaction on a review in the social feed.",
+      "type": "object",
+      "properties": {
+        "reviewId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Reference ID of the reacted review."
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the friend reacting."
+        },
+        "userName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the friend reacting."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["agree"],
+          "description": "Type of reaction."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group-shared visibility scope."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of reaction."
+        }
+      },
+      "required": [
+        "reviewId",
+        "userId",
+        "userName",
+        "type",
+        "visibility",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Public group profiles for friends (no PII)."
+    },
+    "/games/{gameId}": {
+      "schema": { "$ref": "#/entities/Game" },
+      "description": "Manually registered games catalog for the friend group."
+    },
+    "/reviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/Review" },
+      "description": "Friend ratings (0-100) and critiques. Deterministic ID {gameId}_{authorId} enforces one review per friend per game."
+    },
+    "/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/ReviewComment" },
+      "description": "Social comments posted by friends on reviews."
+    },
+    "/reactions/{reactionId}": {
+      "schema": { "$ref": "#/entities/ReviewReaction" },
+      "description": "Friend agreement reactions on reviews. Deterministic ID {reviewId}_{userId}."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Veredito",
+  "description": "Plataforma editorial estilo Metacritic para um grupo de amigos cadastrar jogos manualmente, publicar notas e críticas, filtrar por plataforma, gênero e data de lançamento, e comentar avaliações em um feed social.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
