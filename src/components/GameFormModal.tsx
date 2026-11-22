@@ -1,5 +1,10 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Loader2, PenLine, Search, X } from 'lucide-react';
+import {
+  getRawgGameDetails,
+  searchRawgGames,
+  type RawgSearchResult,
+} from '../services/rawg';
 import {
   CURATED_COVERS,
   GENRES,
@@ -34,6 +39,17 @@ export function GameFormModal({
   const [coverUrl, setCoverUrl] = useState(initialGame?.coverUrl || '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [platformSearch, setPlatformSearch] = useState('');
+  const [showManualFields, setShowManualFields] = useState(Boolean(initialGame));
+
+  // RAWG.io direct lookup state
+  const [rawgQuery, setRawgQuery] = useState('');
+  const [rawgSearching, setRawgSearching] = useState(false);
+  const [rawgImportingId, setRawgImportingId] = useState<number | null>(null);
+  const [rawgResults, setRawgResults] = useState<RawgSearchResult[]>([]);
+  const [rawgError, setRawgError] = useState<string | null>(null);
+  const [rawgImportedTitle, setRawgImportedTitle] = useState<string | null>(null);
+  const [rawgHasSearched, setRawgHasSearched] = useState(false);
 
   const toggleItem = (
     item: string,
@@ -45,6 +61,62 @@ export function GameFormModal({
       setList(list.filter((i) => i !== item));
     } else if (list.length < max) {
       setList([...list, item]);
+    }
+  };
+
+  const handleRawgSearch = async () => {
+    const q = rawgQuery.trim();
+    if (q.length < 2) {
+      setRawgError('Digite pelo menos 2 caracteres para buscar no catálogo RAWG.');
+      return;
+    }
+
+    setRawgError(null);
+    setRawgImportedTitle(null);
+    setRawgSearching(true);
+    setRawgHasSearched(true);
+
+    try {
+      const results = await searchRawgGames(q);
+      setRawgResults(results);
+    } catch (err) {
+      setRawgError(
+        err instanceof Error
+          ? err.message
+          : 'Não foi possível buscar jogos no RAWG. Use a opção “Adicionar jogo manualmente.” abaixo.',
+      );
+      setRawgResults([]);
+    } finally {
+      setRawgSearching(false);
+    }
+  };
+
+  const handleSelectRawgGame = async (candidate: RawgSearchResult) => {
+    setRawgError(null);
+    setRawgImportingId(candidate.id);
+
+    try {
+      const imported = await getRawgGameDetails(candidate.id);
+      if (imported.title) setTitle(imported.title);
+      if (imported.developer) setDeveloper(imported.developer);
+      if (imported.releaseDate) setReleaseDate(imported.releaseDate);
+      if (imported.platforms.length > 0) setPlatforms(imported.platforms);
+      if (imported.genres.length > 0) setGenres(imported.genres);
+      if (imported.synopsis) setSynopsis(imported.synopsis);
+      if (imported.coverUrl) setCoverUrl(imported.coverUrl);
+
+      setRawgImportedTitle(imported.title || candidate.title);
+      setRawgResults([]);
+      setRawgHasSearched(false);
+      setShowManualFields(true);
+    } catch (err) {
+      setRawgError(
+        err instanceof Error
+          ? err.message
+          : 'Erro ao importar dados do jogo selecionado.',
+      );
+    } finally {
+      setRawgImportingId(null);
     }
   };
 
@@ -123,7 +195,11 @@ export function GameFormModal({
       aria-modal="true"
       aria-labelledby="game-modal-title"
     >
-      <div className="bg-[#141614] border border-[#2A2F2A] w-full max-w-3xl max-h-[92vh] overflow-y-auto my-auto text-[#F2F2EE]">
+      <div
+        className={`bg-[#141614] border border-[#2A2F2A] w-full ${
+          showManualFields ? 'max-w-3xl' : 'max-w-xl'
+        } max-h-[92vh] overflow-y-auto my-auto text-[#F2F2EE] transition-[max-width] duration-200`}
+      >
         <div className="sticky top-0 z-10 bg-[#141614] border-b border-[#232723] px-6 py-4 flex items-center justify-between gap-4">
           <div>
             <h2
@@ -133,7 +209,7 @@ export function GameFormModal({
               {initialGame ? 'Editar cadastro do jogo' : 'Cadastrar novo jogo'}
             </h2>
             <p className="text-xs text-[#8C9288] mt-0.5">
-              Adicione jogos manualmente ao catálogo do CobraCritic.
+              Busque automaticamente no catálogo RAWG ou preencha a ficha manualmente.
             </p>
           </div>
           <button
@@ -147,7 +223,171 @@ export function GameFormModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          {/* RAWG.io Lookup Panel */}
+          <div className="bg-[#0C0D0C] border border-[#262A26] p-4 rounded-md space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <label
+                htmlFor="rawg-search-input"
+                className="text-xs font-medium text-[#4ADE80]"
+              >
+                Importar dados do RAWG.io
+              </label>
+              <span className="text-[11px] text-[#787D75]">
+                Preenche capa, estúdio, data, plataformas e sinopse
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-[#787D75] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  id="rawg-search-input"
+                  type="text"
+                  maxLength={100}
+                  value={rawgQuery}
+                  onChange={(e) => setRawgQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleRawgSearch();
+                    }
+                  }}
+                  placeholder="Digite o nome do jogo para buscar (ex.: Clair Obscur, Elden Ring)..."
+                  className="w-full pl-9 pr-3 py-2 text-sm bg-[#141614] border border-[#2C312C] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#4ADE80]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleRawgSearch}
+                disabled={rawgSearching}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold bg-[#1E8E49] text-white rounded-md hover:bg-[#16A34A] disabled:opacity-50 transition-colors shrink-0 cursor-pointer"
+              >
+                {rawgSearching ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Buscando...</span>
+                  </>
+                ) : (
+                  <span>Buscar</span>
+                )}
+              </button>
+            </div>
+
+            {rawgError && (
+              <p className="text-xs text-[#F87171] leading-relaxed" role="alert">
+                {rawgError}
+              </p>
+            )}
+
+            {rawgImportedTitle && (
+              <p className="text-xs text-[#4ADE80] flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5 shrink-0" />
+                <span>
+                  Dados de <strong>{rawgImportedTitle}</strong> preenchidos — revise os
+                  campos abaixo e salve.
+                </span>
+              </p>
+            )}
+
+            {rawgResults.length > 0 && (
+              <ul className="divide-y divide-[#1F231F] border border-[#232723] rounded-md max-h-60 overflow-y-auto bg-[#141614]">
+                {rawgResults.map((item) => {
+                  const isImporting = rawgImportingId === item.id;
+                  return (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        disabled={rawgImportingId !== null}
+                        onClick={() => handleSelectRawgGame(item)}
+                        className="w-full p-2.5 flex items-center justify-between gap-3 text-left hover:bg-[#1C211C] transition-colors cursor-pointer disabled:opacity-60"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {item.coverUrl ? (
+                            <img
+                              src={item.coverUrl}
+                              alt={item.title}
+                              referrerPolicy="no-referrer"
+                              className="w-12 h-9 rounded object-cover border border-[#2C312C] shrink-0 bg-[#1D1E1C]"
+                            />
+                          ) : (
+                            <div className="w-12 h-9 rounded bg-[#1D221D] border border-[#2C312C] shrink-0" />
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-[#F2F2EE] truncate">
+                              {item.title}
+                            </p>
+                            <p className="text-[11px] text-[#8C9288] truncate">
+                              {item.releaseDate ? item.releaseDate.slice(0, 4) : 'Ano N/D'}
+                              {item.platforms.length > 0
+                                ? ` · ${item.platforms.slice(0, 3).join(', ')}`
+                                : ''}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span className="text-xs font-medium text-[#4ADE80] shrink-0 inline-flex items-center gap-1">
+                          {isImporting ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Importando...</span>
+                            </>
+                          ) : (
+                            <span>Selecionar</span>
+                          )}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            {rawgHasSearched && !rawgSearching && !rawgError && rawgResults.length === 0 && (
+              <p className="text-xs text-[#8C9288]">
+                Nenhum jogo encontrado para “{rawgQuery}”. Use a opção “Adicionar jogo
+                manualmente.” abaixo para cadastrar a ficha.
+              </p>
+            )}
+          </div>
+
+          {!showManualFields ? (
+            <div className="flex items-center justify-between gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowManualFields(true)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#A8ACA5] hover:text-[#F2F2EE] bg-[#0C0D0C] hover:bg-[#1A1E1A] border border-[#262A26] hover:border-[#3A403A] rounded-md transition-colors cursor-pointer"
+              >
+                <PenLine className="w-3.5 h-3.5 text-[#787D75]" />
+                <span>Adicionar jogo manualmente.</span>
+                <ChevronDown className="w-3.5 h-3.5 text-[#787D75]" />
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-sm font-medium text-[#A8ACA5] hover:text-[#F2F2EE] transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          ) : (
+            <>
+              {!initialGame && !rawgImportedTitle && (
+                <div className="flex items-center justify-between gap-2 pb-1 border-b border-[#232723]">
+                  <span className="text-xs font-medium text-[#A8ACA5]">
+                    Cadastro manual do jogo
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowManualFields(false)}
+                    className="inline-flex items-center gap-1 text-xs text-[#8C9288] hover:text-[#F2F2EE] transition-colors cursor-pointer"
+                  >
+                    <span>Ocultar campos</span>
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
             <div className="md:col-span-8 space-y-4">
               <div>
                 <label
@@ -239,15 +479,29 @@ export function GameFormModal({
             </div>
           </div>
 
-          <div className="pt-2 border-t border-[#232723]">
-            <div className="flex items-center justify-between mb-2">
+          <div className="pt-2 border-t border-[#232723] space-y-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-medium text-[#A8ACA5]">
                 Plataformas ({platforms.length}/{LIMITS.PLATFORMS_MAX})
               </span>
-              <span className="text-xs text-[#787D75]">Selecione ao menos 1</span>
+              <input
+                type="text"
+                value={platformSearch}
+                onChange={(e) => setPlatformSearch(e.target.value)}
+                placeholder="Filtrar consoles..."
+                aria-label="Filtrar plataformas"
+                className="w-44 px-2.5 py-1 text-xs bg-[#0C0D0C] border border-[#2C312C] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#4ADE80]"
+              />
             </div>
-            <div className="flex flex-wrap gap-2">
-              {PLATFORMS.map((platform) => {
+            <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1">
+              {PLATFORMS.filter((platform) => {
+                const q = platformSearch.trim().toLowerCase();
+                if (!q) return true;
+                return (
+                  platforms.includes(platform) ||
+                  platform.toLowerCase().includes(q)
+                );
+              }).map((platform) => {
                 const selected = platforms.includes(platform);
                 return (
                   <button
@@ -353,26 +607,28 @@ export function GameFormModal({
             </p>
           )}
 
-          <div className="pt-4 border-t border-[#232723] flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-[#A8ACA5] hover:text-[#F2F2EE] transition-colors cursor-pointer"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-5 py-2 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              {saving
-                ? 'Salvando...'
-                : initialGame
-                  ? 'Salvar alterações'
-                  : 'Cadastrar jogo'}
-            </button>
-          </div>
+              <div className="pt-4 border-t border-[#232723] flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm font-medium text-[#A8ACA5] hover:text-[#F2F2EE] transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-5 py-2 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {saving
+                    ? 'Salvando...'
+                    : initialGame
+                      ? 'Salvar alterações'
+                      : 'Cadastrar jogo'}
+                </button>
+              </div>
+            </>
+          )}
         </form>
       </div>
     </div>

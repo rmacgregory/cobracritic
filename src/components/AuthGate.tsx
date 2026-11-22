@@ -82,12 +82,11 @@ export function AuthGate({
                   <input
                     id="admin-username"
                     type="text"
-                    autoComplete="username"
+                    autoComplete="off"
                     required
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="dungeonmaster"
-                    className="w-full px-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#4ADE80]"
+                    className="w-full px-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
                   />
                 </div>
 
@@ -101,12 +100,11 @@ export function AuthGate({
                   <input
                     id="admin-password"
                     type="password"
-                    autoComplete="current-password"
+                    autoComplete="off"
                     required
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full px-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#4ADE80]"
+                    className="w-full px-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
                   />
                 </div>
 

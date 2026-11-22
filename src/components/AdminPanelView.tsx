@@ -74,7 +74,7 @@ export function AdminPanelView({
   const [feedback, setFeedback] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Manual UID admin grant (useful for granting Email/Password admin accounts like dungeonmaster)
+  // Manual UID admin grant (useful for granting Email/Password admin accounts)
   const [manualUid, setManualUid] = useState('');
   const [manualLabel, setManualLabel] = useState('');
 
@@ -639,7 +639,7 @@ export function AdminPanelView({
             </div>
           )}
 
-          {/* Grant Admin by UID (for Email/Password accounts like dungeonmaster) */}
+          {/* Grant Admin by UID (for Email/Password admin accounts) */}
           <section className="bg-[#141614] border border-[#262A26] p-5 space-y-4">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -648,9 +648,8 @@ export function AdminPanelView({
                   <span>Conceder Admin por UID</span>
                 </h2>
                 <p className="text-xs text-[#90968C] mt-1 leading-relaxed">
-                  Use este campo para vincular contas criadas diretamente no Firebase
-                  Authentication (como o login <span className="font-mono text-[#F2F2EE]">dungeonmaster</span>)
-                  como administrador.
+                  Use este campo para vincular uma conta criada diretamente no Firebase
+                  Authentication como administrador do CobraCritic.
                 </p>
               </div>
             </div>
@@ -672,7 +671,7 @@ export function AdminPanelView({
                 maxLength={LIMITS.DISPLAY_NAME_MAX}
                 value={manualLabel}
                 onChange={(e) => setManualLabel(e.target.value)}
-                placeholder="Rótulo (ex.: Dungeon Master)"
+                placeholder="Nome de exibição do admin"
                 aria-label="Nome do administrador"
                 className="sm:col-span-4 px-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#4ADE80]"
               />
