@@ -19,9 +19,9 @@ export function GameCover({
   className = '',
   compact = false,
 }: GameCoverProps) {
-  const [failed, setFailed] = useState(false);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const resolvedUrl = resolveAssetUrl(coverUrl);
-  const hasImage = Boolean(resolvedUrl && !failed);
+  const hasImage = Boolean(resolvedUrl && failedUrl !== resolvedUrl);
 
   return (
     <div
@@ -33,7 +33,7 @@ export function GameCover({
           alt={`Capa do jogo ${title}`}
           referrerPolicy="no-referrer"
           loading="lazy"
-          onError={() => setFailed(true)}
+          onError={() => setFailedUrl(resolvedUrl)}
           className="w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-[1.02]"
         />
       ) : (

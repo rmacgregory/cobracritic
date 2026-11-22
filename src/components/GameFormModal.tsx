@@ -1,8 +1,19 @@
 import React, { useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Loader2, PenLine, Search, X } from 'lucide-react';
 import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Image as ImageIcon,
+  Loader2,
+  PenLine,
+  Search,
+  X,
+} from 'lucide-react';
+import {
+  findVerticalCoversForTitle,
   getRawgGameDetails,
   searchRawgGames,
+  type CoverOption,
   type RawgSearchResult,
 } from '../services/rawg';
 import {
@@ -50,6 +61,11 @@ export function GameFormModal({
   const [rawgError, setRawgError] = useState<string | null>(null);
   const [rawgImportedTitle, setRawgImportedTitle] = useState<string | null>(null);
   const [rawgHasSearched, setRawgHasSearched] = useState(false);
+
+  // Vertical cover candidates (Steam 600x900, Wikipedia box art, RAWG)
+  const [coverOptions, setCoverOptions] = useState<CoverOption[]>([]);
+  const [findingVerticalCover, setFindingVerticalCover] = useState(false);
+  const [verticalCoverHint, setVerticalCoverHint] = useState<string | null>(null);
 
   const toggleItem = (
     item: string,
@@ -104,6 +120,12 @@ export function GameFormModal({
       if (imported.genres.length > 0) setGenres(imported.genres);
       if (imported.synopsis) setSynopsis(imported.synopsis);
       if (imported.coverUrl) setCoverUrl(imported.coverUrl);
+      setCoverOptions(imported.coverOptions || []);
+      setVerticalCoverHint(
+        imported.coverOptions?.some((c) => c.orientation === 'vertical')
+          ? 'Capa vertical selecionada automaticamente.'
+          : null,
+      );
 
       setRawgImportedTitle(imported.title || candidate.title);
       setRawgResults([]);
@@ -117,6 +139,42 @@ export function GameFormModal({
       );
     } finally {
       setRawgImportingId(null);
+    }
+  };
+
+  const handleFindVerticalCover = async () => {
+    const cleanTitle = title.trim();
+    if (cleanTitle.length < 2) {
+      setVerticalCoverHint('Informe o título do jogo antes de buscar a capa vertical.');
+      return;
+    }
+
+    setFindingVerticalCover(true);
+    setVerticalCoverHint(null);
+    try {
+      const found = await findVerticalCoversForTitle(cleanTitle, releaseDate);
+      if (found.length === 0) {
+        setVerticalCoverHint(
+          'Nenhuma capa vertical encontrada automaticamente. Você pode colar uma URL manual abaixo.',
+        );
+        return;
+      }
+
+      setCoverOptions((prev) => {
+        const merged = [...found];
+        for (const existing of prev) {
+          if (!merged.some((item) => item.url === existing.url)) {
+            merged.push(existing);
+          }
+        }
+        return merged;
+      });
+      setCoverUrl(found[0].url);
+      setVerticalCoverHint(`Capa aplicada: ${found[0].label}.`);
+    } catch {
+      setVerticalCoverHint('Não foi possível buscar capas verticais agora.');
+    } finally {
+      setFindingVerticalCover(false);
     }
   };
 
@@ -467,7 +525,7 @@ export function GameFormModal({
             </div>
 
             <div className="md:col-span-4 space-y-3">
-              <p className="text-xs font-medium text-[#A8ACA5]">Prévia da capa</p>
+              <p className="text-xs font-medium text-[#A8ACA5]">Prévia da capa (vertical)</p>
               <div className="max-w-[180px] md:max-w-none">
                 <GameCover
                   title={title.trim() || 'Novo Jogo'}
@@ -476,6 +534,29 @@ export function GameFormModal({
                   coverUrl={coverUrl}
                 />
               </div>
+              <button
+                type="button"
+                onClick={handleFindVerticalCover}
+                disabled={findingVerticalCover || !title.trim()}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#0C0D0C] hover:bg-[#1A1E1A] text-[#D2D6CE] border border-[#2C312C] hover:border-[#4ADE80]/60 rounded-md disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {findingVerticalCover ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#4ADE80]" />
+                    <span>Buscando capa vertical...</span>
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="w-3.5 h-3.5 text-[#4ADE80]" />
+                    <span>Buscar capa vertical</span>
+                  </>
+                )}
+              </button>
+              {verticalCoverHint && (
+                <p className="text-[11px] text-[#8C9288] leading-snug">
+                  {verticalCoverHint}
+                </p>
+              )}
             </div>
           </div>
 
@@ -554,6 +635,50 @@ export function GameFormModal({
           </div>
 
           <div className="pt-2 border-t border-[#232723] space-y-3">
+            {coverOptions.length > 0 && (
+              <div className="space-y-2">
+                <span className="block text-xs font-medium text-[#A8ACA5]">
+                  Capas encontradas automaticamente
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  {coverOptions.map((option) => {
+                    const selected = coverUrl === option.url;
+                    return (
+                      <button
+                        key={option.url}
+                        type="button"
+                        onClick={() => setCoverUrl(option.url)}
+                        className={`flex items-center gap-2.5 p-2 rounded-md border text-left transition-colors cursor-pointer ${
+                          selected
+                            ? 'bg-[#172119] border-[#4ADE80] text-[#F2F2EE]'
+                            : 'bg-[#0C0D0C] border-[#262A26] text-[#A8ACA5] hover:border-[#4A524A]'
+                        }`}
+                      >
+                        <img
+                          src={option.url}
+                          alt={option.label}
+                          referrerPolicy="no-referrer"
+                          className="w-9 h-12 rounded object-cover border border-[#2C312C] shrink-0 bg-[#181A18]"
+                        />
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium leading-tight line-clamp-2">
+                            {option.label}
+                          </p>
+                          <p className="text-[10px] text-[#787D75] mt-0.5">
+                            {option.orientation === 'vertical'
+                              ? 'Formato vertical'
+                              : option.orientation === 'square'
+                                ? 'Formato quadrado'
+                                : 'Formato horizontal'}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div>
               <label
                 htmlFor="game-cover-url"
