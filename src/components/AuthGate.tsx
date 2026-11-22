@@ -1,4 +1,4 @@
-import { CURATED_COVERS } from '../types';
+import { CURATED_COVERS, resolveAssetUrl } from '../types';
 import { ScoreBadge } from './ScoreBadge';
 
 interface AuthGateProps {
@@ -90,7 +90,7 @@ export function AuthGate({ onSignIn, signingIn, authError }: AuthGateProps) {
                 <article className="bg-[#141614] border border-[#262A26] p-3">
                   <div className="aspect-[3/4] overflow-hidden bg-[#1D1E1C]">
                     <img
-                      src={CURATED_COVERS[0].url}
+                      src={resolveAssetUrl(CURATED_COVERS[0].url)}
                       alt="Capa de fantasia sombria"
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
@@ -110,7 +110,7 @@ export function AuthGate({ onSignIn, signingIn, authError }: AuthGateProps) {
                 <article className="bg-[#141614] border border-[#262A26] p-3">
                   <div className="aspect-[3/4] overflow-hidden bg-[#1D1E1C]">
                     <img
-                      src={CURATED_COVERS[2].url}
+                      src={resolveAssetUrl(CURATED_COVERS[2].url)}
                       alt="Capa de estratégia botânica"
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
@@ -132,7 +132,7 @@ export function AuthGate({ onSignIn, signingIn, authError }: AuthGateProps) {
                 <article className="bg-[#141614] border border-[#262A26] p-3">
                   <div className="aspect-[3/4] overflow-hidden bg-[#1D1E1C]">
                     <img
-                      src={CURATED_COVERS[1].url}
+                      src={resolveAssetUrl(CURATED_COVERS[1].url)}
                       alt="Capa de exploração espacial"
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
@@ -152,7 +152,7 @@ export function AuthGate({ onSignIn, signingIn, authError }: AuthGateProps) {
                 <article className="bg-[#141614] border border-[#262A26] p-3">
                   <div className="aspect-[3/4] overflow-hidden bg-[#1D1E1C]">
                     <img
-                      src={CURATED_COVERS[3].url}
+                      src={resolveAssetUrl(CURATED_COVERS[3].url)}
                       alt="Capa de corrida endurance"
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"

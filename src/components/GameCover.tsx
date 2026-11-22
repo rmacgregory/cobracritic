@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Gamepad2 } from 'lucide-react';
+import { resolveAssetUrl } from '../types';
 
 interface GameCoverProps {
   title: string;
@@ -19,7 +20,8 @@ export function GameCover({
   compact = false,
 }: GameCoverProps) {
   const [failed, setFailed] = useState(false);
-  const hasImage = Boolean(coverUrl && coverUrl.trim().length > 0 && !failed);
+  const resolvedUrl = resolveAssetUrl(coverUrl);
+  const hasImage = Boolean(resolvedUrl && !failed);
 
   return (
     <div
@@ -27,7 +29,7 @@ export function GameCover({
     >
       {hasImage ? (
         <img
-          src={coverUrl}
+          src={resolvedUrl}
           alt={`Capa do jogo ${title}`}
           referrerPolicy="no-referrer"
           loading="lazy"

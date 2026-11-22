@@ -299,6 +299,17 @@ export function sanitizeAvatarUrl(raw: string | null | undefined): string {
   return '';
 }
 
+export function resolveAssetUrl(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('/src/assets/')) {
+    const base = import.meta.env.BASE_URL || './';
+    const normalizedBase = base.endsWith('/') ? base : `${base}/`;
+    return `${normalizedBase}${trimmed.slice(1)}`;
+  }
+  return trimmed;
+}
+
 export const STARTER_GAMES: GameInput[] = [
   {
     title: 'Citadel of Silver Ash',
