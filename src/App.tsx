@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ban, Check, Copy, LogOut, Menu, Plus, Shield } from 'lucide-react';
+import { Ban, Check, Copy, Eye, LogOut, Menu, Plus, Shield } from 'lucide-react';
 import { AdminPanelView } from './components/AdminPanelView';
 import { AuthGate } from './components/AuthGate';
 import { CatalogView } from './components/CatalogView';
@@ -33,6 +33,9 @@ function CobraCriticShell() {
     authError,
     adminAuthError,
     isAdmin,
+    isRealAdmin,
+    viewAsMember,
+    toggleViewAsMember,
     isBanned,
     currentBan,
     profileSetupPending,
@@ -190,7 +193,7 @@ function CobraCriticShell() {
     );
   }
 
-  if (profileSetupPending && !isAdmin) {
+  if (profileSetupPending && !isRealAdmin) {
     return (
       <div className="min-h-screen bg-[#0C0D0C] text-[#F2F2EE] flex flex-col items-center justify-center px-4 py-12">
         <div className="w-full max-w-lg bg-[#141614] border border-[#262A26] p-8 space-y-5">
@@ -335,6 +338,42 @@ function CobraCriticShell() {
           />
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {isRealAdmin && (
+              <button
+                type="button"
+                onClick={toggleViewAsMember}
+                aria-pressed={viewAsMember}
+                title={
+                  viewAsMember
+                    ? 'Você está vendo o site como usuário comum. Clique para voltar ao modo Admin.'
+                    : 'Visualizar o site como um usuário comum'
+                }
+                aria-label={
+                  viewAsMember
+                    ? 'Sair da visualização de usuário comum e voltar ao modo Admin'
+                    : 'Ver o site como usuário comum'
+                }
+                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  viewAsMember
+                    ? 'bg-[#241D0F] border-[#FBBF24]/70 text-[#FDE68A] hover:bg-[#2E2512]'
+                    : 'bg-[#141614] border-[#262A26] text-[#A8ACA5] hover:text-[#F2F2EE] hover:border-[#3A433A]'
+                }`}
+              >
+                {viewAsMember ? (
+                  <>
+                    <Shield className="w-3.5 h-3.5 text-[#FBBF24] shrink-0" />
+                    <span className="hidden sm:inline">Modo usuário · Voltar p/ Admin</span>
+                    <span className="sm:hidden">Voltar Admin</span>
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5 shrink-0" />
+                    <span className="hidden md:inline">Ver como usuário</span>
+                  </>
+                )}
+              </button>
+            )}
+
             <NotificationsBell
               onSelectGame={handleSelectGame}
               onEditGame={handleOpenEditGame}

@@ -149,6 +149,10 @@ interface VereditoContextValue {
   profileSetupPending: boolean;
   isMasterAdmin: boolean;
   isAdmin: boolean;
+  isRealAdmin: boolean;
+  viewAsMember: boolean;
+  setViewAsMember: (next: boolean) => void;
+  toggleViewAsMember: () => void;
   isBanned: boolean;
   currentBan: UserBan | null;
   admins: AdminGrant[];
@@ -260,6 +264,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   });
   const [liveNotifId, setLiveNotifId] = useState<string | null>(null);
   const [liveCoverReportId, setLiveCoverReportId] = useState<string | null>(null);
+  const [viewAsMember, setViewAsMember] = useState(false);
   const seenCommentIdsRef = useRef<Set<string>>(new Set());
   const commentsInitializedRef = useRef(false);
   const seenCoverReportIdsRef = useRef<Set<string>>(new Set());
@@ -338,6 +343,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         setCoverReports([]);
         setLiveNotifId(null);
         setLiveCoverReportId(null);
+        setViewAsMember(false);
         seenCommentIdsRef.current = new Set();
         commentsInitializedRef.current = false;
         seenCoverReportIdsRef.current = new Set();
@@ -556,22 +562,36 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     return bansByUid[user.uid] || null;
   }, [bansByUid, user]);
 
-  const isMasterAdmin = useMemo(() => {
+  const isRealMasterAdmin = useMemo(() => {
     return Boolean(user?.email === MASTER_ADMIN_EMAIL && user?.emailVerified);
   }, [user]);
 
   const isBanned = useMemo(() => {
-    return Boolean(currentBan && !isMasterAdmin);
-  }, [currentBan, isMasterAdmin]);
+    return Boolean(currentBan && !isRealMasterAdmin);
+  }, [currentBan, isRealMasterAdmin]);
 
-  const isAdmin = useMemo(() => {
+  const isRealAdmin = useMemo(() => {
     if (!user || isBanned) return false;
-    return isMasterAdmin || adminUids.has(user.uid);
-  }, [user, isMasterAdmin, adminUids, isBanned]);
+    return isRealMasterAdmin || adminUids.has(user.uid);
+  }, [user, isRealMasterAdmin, adminUids, isBanned]);
+
+  useEffect(() => {
+    if (!isRealAdmin && viewAsMember) {
+      setViewAsMember(false);
+    }
+  }, [isRealAdmin, viewAsMember]);
+
+  const toggleViewAsMember = useCallback(() => {
+    if (!isRealAdmin) return;
+    setViewAsMember((prev) => !prev);
+  }, [isRealAdmin]);
+
+  const isMasterAdmin = isRealMasterAdmin && !viewAsMember;
+  const isAdmin = isRealAdmin && !viewAsMember;
 
   // Dedicated real-time listener for cover reports:
-  // - Admins receive all group cover reports + live notifications when new ones arrive.
-  // - Regular members only track their own reports (never receive admin alerts).
+  // - Real admins stay subscribed to group cover reports (avoiding listener churn when toggling preview mode).
+  // - Cover report notifications & UI are only exposed when effective `isAdmin` is true.
   useEffect(() => {
     if (!authReady || !user) {
       setCoverReports([]);
@@ -581,7 +601,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     coverReportsInitializedRef.current = false;
     seenCoverReportIdsRef.current = new Set();
 
-    const reportsQuery = isAdmin
+    const reportsQuery = isRealAdmin
       ? query(collection(db, 'coverReports'), where('visibility', '==', 'group'))
       : query(
           collection(db, 'coverReports'),
@@ -603,7 +623,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
             list.filter((r) => r.status === 'open').map((r) => r.id),
           );
           coverReportsInitializedRef.current = true;
-        } else if (isAdmin) {
+        } else if (isRealAdmin) {
           for (const change of snap.docChanges()) {
             const data = change.doc.data() as Omit<CoverReport, 'id'>;
             const docId = change.doc.id;
@@ -629,7 +649,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     );
 
     return () => unsubReports();
-  }, [authReady, user, isAdmin]);
+  }, [authReady, user, isRealAdmin]);
 
   const gamesWithStats = useMemo<GameWithStats[]>(() => {
     const reviewsByGame = new Map<string, Review[]>();
@@ -1703,6 +1723,10 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         profileSetupPending,
         isMasterAdmin,
         isAdmin,
+        isRealAdmin,
+        viewAsMember,
+        setViewAsMember,
+        toggleViewAsMember,
         isBanned,
         currentBan,
         admins,

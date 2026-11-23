@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   ArrowDown,
+  ArrowLeft,
   ArrowRight,
   ArrowUp,
   Award,
@@ -526,10 +527,15 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
     removeEventVote,
   } = useVeredito();
 
-  const visibleEvents = useMemo(
-    () => (isAdmin ? events : events.filter((ev) => ev.status !== 'inactive')),
-    [events, isAdmin],
-  );
+  const visibleEvents = useMemo(() => {
+    const filtered = isAdmin ? events : events.filter((ev) => ev.status !== 'inactive');
+    const priority: Record<EventStatus, number> = {
+      active: 0,
+      inactive: 1,
+      closed: 2,
+    };
+    return [...filtered].sort((a, b) => priority[a.status] - priority[b.status]);
+  }, [events, isAdmin]);
 
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'public' | 'builder'>('public');
@@ -557,6 +563,7 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
   );
 
   const newCategoryInputRef = useRef<HTMLInputElement | null>(null);
+  const justCreatedEventIdRef = useRef<string | null>(null);
 
   const gamesById = useMemo(() => {
     const map: Record<string, Game> = {};
@@ -564,16 +571,34 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
     return map;
   }, [games]);
 
-  // Keep selectedEventId pointing at a valid visible event
+  const eventStatsById = useMemo(() => {
+    const map: Record<string, { voterIds: Set<string>; myCategoryIds: Set<string> }> = {};
+    for (const vote of eventVotes) {
+      if (!map[vote.eventId]) {
+        map[vote.eventId] = { voterIds: new Set<string>(), myCategoryIds: new Set<string>() };
+      }
+      map[vote.eventId].voterIds.add(vote.userId);
+      if (user && vote.userId === user.uid) {
+        map[vote.eventId].myCategoryIds.add(vote.categoryId);
+      }
+    }
+    return map;
+  }, [eventVotes, user]);
+
+  // Keep selectedEventId null on initial entry (Events Hub), and clear if selected event disappears
   useEffect(() => {
-    if (visibleEvents.length === 0) {
-      setSelectedEventId(null);
+    if (!selectedEventId) return;
+    if (visibleEvents.some((e) => e.id === selectedEventId)) {
+      if (justCreatedEventIdRef.current === selectedEventId) {
+        justCreatedEventIdRef.current = null;
+      }
       return;
     }
-    if (!selectedEventId || !visibleEvents.some((e) => e.id === selectedEventId)) {
-      const firstActive = visibleEvents.find((e) => e.status === 'active');
-      setSelectedEventId((firstActive || visibleEvents[0]).id);
+    if (justCreatedEventIdRef.current === selectedEventId) {
+      return;
     }
+    setSelectedEventId(null);
+    setViewMode('public');
   }, [visibleEvents, selectedEventId]);
 
   const selectedEvent = useMemo(
@@ -831,6 +856,7 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
     setFeedback(null);
     try {
       const id = await createEvent(input);
+      justCreatedEventIdRef.current = id;
       setSelectedEventId(id);
       setShowCreateModal(false);
       setViewMode('builder');
@@ -844,6 +870,22 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
     } finally {
       setBusyAction(null);
     }
+  };
+
+  const handleOpenEvent = (ev: CobraEvent) => {
+    setFeedback(null);
+    setSelectedEventId(ev.id);
+    setViewMode(ev.status === 'inactive' && isAdmin ? 'builder' : 'public');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleBackToHub = () => {
+    guardUnsavedAndRun(() => {
+      setSelectedEventId(null);
+      setViewMode('public');
+      setConfirmDeleteEvent(false);
+      setFeedback(null);
+    });
   };
 
   const handleToggleActive = async (ev: CobraEvent) => {
@@ -1243,70 +1285,191 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
         </div>
       )}
 
-      {/* Event Selector Strip */}
-      {visibleEvents.length > 0 && (
-        <div className="flex items-center gap-2 overflow-x-auto pb-1">
-          {visibleEvents.map((ev) => {
-            const isSelected = selectedEvent?.id === ev.id;
-            const meta = getStatusMeta(ev.status);
-            return (
-              <button
-                key={ev.id}
-                type="button"
-                onClick={() => {
-                  if (ev.id === selectedEvent?.id) return;
-                  guardUnsavedAndRun(() => setSelectedEventId(ev.id));
-                }}
-                className={`shrink-0 px-4 py-2.5 rounded-md border text-left transition-colors cursor-pointer ${
-                  isSelected
-                    ? 'bg-[#191F19] border-[#4ADE80]/70 text-[#F2F2EE]'
-                    : 'bg-[#141614] border-[#262A26] text-[#A8ACA5] hover:border-[#3A403A] hover:text-[#F2F2EE]'
-                }`}
-              >
-                <p className="font-display text-sm font-semibold truncate max-w-[230px]">
-                  {ev.title}
-                </p>
-                <p className="text-[11px] text-[#8C9288] mt-0.5 flex items-center gap-1.5 tabular-nums">
-                  <span className={meta.textClass}>{meta.shortLabel}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>
-                    {ev.categories.length}{' '}
-                    {ev.categories.length === 1 ? 'categoria' : 'categorias'}
-                  </span>
-                </p>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Empty State */}
+      {/* Events Hub (Entry View) or Active Event View */}
       {!selectedEvent ? (
-        <section className="bg-[#141614] border border-[#262A26] rounded-md p-10 text-center space-y-3">
-          <Trophy className="w-9 h-9 text-[#4B5148] mx-auto" strokeWidth={1.5} />
-          <h2 className="font-display text-2xl font-semibold text-[#F2F2EE]">
-            Nenhum evento disponível no momento
-          </h2>
-          <p className="text-sm text-[#90968C] max-w-md mx-auto">
-            {isAdmin
-              ? 'Crie o primeiro evento de premiação ou bolão clicando em “Novo evento” acima, monte as categorias e escolha os jogos do catálogo.'
-              : 'Quando um administrador ativar um evento de votação ou premiação, ele aparecerá aqui para você registrar seus palpites.'}
-          </p>
-          {isAdmin && (
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold bg-[#4ADE80] text-[#0C0D0C] rounded-md hover:bg-[#6EE79E] transition-colors cursor-pointer"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Criar primeiro evento</span>
-              </button>
+        visibleEvents.length === 0 ? (
+          <section className="bg-[#141614] border border-[#262A26] rounded-md p-10 text-center space-y-3">
+            <Trophy className="w-9 h-9 text-[#4B5148] mx-auto" strokeWidth={1.5} />
+            <h2 className="font-display text-2xl font-semibold text-[#F2F2EE]">
+              Nenhum evento disponível no momento
+            </h2>
+            <p className="text-sm text-[#90968C] max-w-md mx-auto">
+              {isAdmin
+                ? 'Crie o primeiro evento de premiação ou bolão clicando em “Novo evento” acima, monte as categorias e escolha os jogos do catálogo.'
+                : 'Quando um administrador ativar um evento de votação ou premiação, ele aparecerá aqui para você registrar seus palpites.'}
+            </p>
+            {isAdmin && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold bg-[#4ADE80] text-[#0C0D0C] rounded-md hover:bg-[#6EE79E] transition-colors cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Criar primeiro evento</span>
+                </button>
+              </div>
+            )}
+          </section>
+        ) : (
+          <section aria-label="Lista de eventos" className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs sm:text-sm text-[#90968C]">
+                Escolha um evento abaixo para participar da votação ou conferir os resultados.
+              </p>
+              <span className="text-xs font-mono text-[#787D75] tabular-nums">
+                {visibleEvents.length} {visibleEvents.length === 1 ? 'evento' : 'eventos'}
+              </span>
             </div>
-          )}
-        </section>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {visibleEvents.map((ev) => {
+                const stats = eventStatsById[ev.id];
+                const voterCount = stats ? stats.voterIds.size : 0;
+                const myVotedCount = stats
+                  ? ev.categories.filter((c) => stats.myCategoryIds.has(c.id)).length
+                  : 0;
+                const awardedCount = ev.categories.filter((c) => Boolean(c.winnerNomineeId)).length;
+                const isOpen = ev.status === 'active';
+                const isClosed = ev.status === 'closed';
+
+                return (
+                  <button
+                    key={ev.id}
+                    type="button"
+                    onClick={() => handleOpenEvent(ev)}
+                    className={`group text-left bg-[#141614] border rounded-md p-5 sm:p-6 flex flex-col justify-between gap-5 transition-all cursor-pointer ${
+                      isOpen
+                        ? 'border-[#255436] hover:border-[#4ADE80] hover:bg-[#161B17]'
+                        : isClosed
+                          ? 'border-[#4D3B17] hover:border-[#FBBF24] hover:bg-[#191813]'
+                          : 'border-[#2A2F2A] hover:border-[#4B5148] hover:bg-[#171A17]'
+                    }`}
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span
+                          className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
+                            isOpen
+                              ? 'text-[#4ADE80]'
+                              : isClosed
+                                ? 'text-[#FBBF24]'
+                                : 'text-[#90968C]'
+                          }`}
+                        >
+                          {isOpen ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                          ) : isClosed ? (
+                            <Trophy className="w-3.5 h-3.5 shrink-0" />
+                          ) : (
+                            <Lock className="w-3.5 h-3.5 shrink-0" />
+                          )}
+                          <span>
+                            {isOpen
+                              ? 'Votação aberta'
+                              : isClosed
+                                ? 'Encerrado'
+                                : 'Inativo · Rascunho'}
+                          </span>
+                        </span>
+
+                        <span className="text-[11px] font-mono text-[#8C9288] tabular-nums">
+                          {ev.categories.length}{' '}
+                          {ev.categories.length === 1 ? 'categoria' : 'categorias'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <h2 className="font-display text-xl sm:text-2xl font-bold text-[#F2F2EE] group-hover:text-white leading-snug">
+                          {ev.title}
+                        </h2>
+                        {ev.description && (
+                          <p className="text-xs sm:text-sm text-[#90968C] leading-relaxed line-clamp-2">
+                            {ev.description}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#8C9288] tabular-nums">
+                        <span className="inline-flex items-center gap-1">
+                          <Users className="w-3.5 h-3.5" />
+                          {voterCount}{' '}
+                          {voterCount === 1 ? 'membro votou' : 'membros votaram'}
+                        </span>
+                        {isOpen && ev.categories.length > 0 && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span
+                              className={
+                                myVotedCount > 0 ? 'text-[#4ADE80] font-medium' : 'text-[#90968C]'
+                              }
+                            >
+                              Seus palpites: {myVotedCount}/{ev.categories.length}
+                            </span>
+                          </>
+                        )}
+                        {isClosed && awardedCount > 0 && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span className="text-[#FDE68A]">
+                              {awardedCount}{' '}
+                              {awardedCount === 1 ? 'vencedor definido' : 'vencedores definidos'}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="pt-3.5 border-t border-[#222622] flex items-center justify-between gap-2">
+                      <span
+                        className={`text-xs sm:text-sm font-semibold ${
+                          isOpen
+                            ? 'text-[#4ADE80]'
+                            : isClosed
+                              ? 'text-[#FBBF24]'
+                              : 'text-[#C8CBC4]'
+                        }`}
+                      >
+                        {isOpen
+                          ? 'Entrar para votar'
+                          : isClosed
+                            ? 'Ver resultados'
+                            : 'Configurar evento'}
+                      </span>
+                      <ArrowRight
+                        className={`w-4 h-4 transition-transform group-hover:translate-x-1 ${
+                          isOpen
+                            ? 'text-[#4ADE80]'
+                            : isClosed
+                              ? 'text-[#FBBF24]'
+                              : 'text-[#C8CBC4]'
+                        }`}
+                      />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )
       ) : (
         <div className="space-y-6">
+          {/* Back to Events Hub Navigation */}
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={handleBackToHub}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-md border border-[#2A2F2A] bg-[#141614] text-xs sm:text-sm font-medium text-[#C8CBC4] hover:text-[#F2F2EE] hover:border-[#4ADE80]/60 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Voltar para eventos</span>
+            </button>
+            <span className="text-xs font-mono text-[#787D75] tabular-nums hidden sm:inline">
+              {visibleEvents.length}{' '}
+              {visibleEvents.length === 1 ? 'evento disponível' : 'eventos disponíveis'}
+            </span>
+          </div>
+
           {/* Event Header & Mode Bar */}
           <section className="bg-[#141614] border border-[#262A26] rounded-md p-5 sm:p-6 space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2173,7 +2336,7 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
                   )}
                 </section>
               ) : (
-                <div className="space-y-5">
+                <div className="space-y-7">
                   {selectedEvent.categories.map((category, categoryIdx) => {
                     const catVotes = votesByCategory[category.id] || [];
                     const myVote = myVoteByCategory[category.id];
@@ -2184,38 +2347,61 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
                       selectedEvent.status === 'closed' && winnerNominee
                         ? catVotes.filter((v) => v.nomineeId === winnerNominee.id)
                         : [];
+                    const isAwardedClosed = selectedEvent.status === 'closed' && Boolean(winnerNominee);
 
                     return (
                       <section
                         id={`event-cat-${category.id}`}
                         key={category.id}
-                        className="bg-[#141614] border border-[#262A26] rounded-md p-5 space-y-4 scroll-mt-20"
+                        className="bg-[#141614] border border-[#262A26] rounded-md overflow-hidden scroll-mt-20"
                       >
-                        {/* Category Header */}
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#222622] pb-3.5">
-                          <div className="flex items-baseline gap-2.5 min-w-0 flex-1">
-                            <span className="font-mono text-xs font-semibold text-[#4ADE80] tabular-nums shrink-0">
+                        {/* Elevated Category Header Band */}
+                        <div
+                          className={`px-5 sm:px-6 py-4 bg-[#191F19] border-b border-[#2A322A] border-l-4 flex flex-wrap items-center justify-between gap-3 ${
+                            isAwardedClosed ? 'border-l-[#FBBF24]' : 'border-l-[#4ADE80]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0 flex-1">
+                            <span
+                              className={`w-9 h-9 rounded-md border font-mono text-sm font-bold flex items-center justify-center shrink-0 tabular-nums ${
+                                isAwardedClosed
+                                  ? 'bg-[#261E0F] border-[#66511D] text-[#FBBF24]'
+                                  : 'bg-[#122419] border-[#2A593B] text-[#4ADE80]'
+                              }`}
+                            >
                               {String(categoryIdx + 1).padStart(2, '0')}
                             </span>
-                            <h3 className="font-display text-xl font-semibold text-[#F2F2EE] truncate">
-                              {category.name}
-                            </h3>
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-medium uppercase tracking-wider text-[#7C867C] leading-none mb-1">
+                                Categoria
+                              </p>
+                              <h3 className="font-display text-2xl sm:text-[26px] font-bold tracking-tight text-[#F2F2EE] leading-tight">
+                                {category.name}
+                              </h3>
+                            </div>
                           </div>
 
-                          <div className="flex items-center gap-3 text-xs text-[#8C9288] shrink-0">
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-[#90968C] shrink-0">
                             <span className="font-mono tabular-nums">
                               {catVotes.length} {catVotes.length === 1 ? 'voto' : 'votos'}
                             </span>
                             {selectedEvent.status === 'active' && myVote && (
-                              <span className="inline-flex items-center gap-1 text-[#4ADE80] font-medium">
+                              <span className="inline-flex items-center gap-1.5 text-[#4ADE80] font-semibold">
                                 <Check className="w-3.5 h-3.5" />
-                                Votado
+                                Seu voto registrado
+                              </span>
+                            )}
+                            {isAwardedClosed && (
+                              <span className="inline-flex items-center gap-1.5 text-[#FBBF24] font-semibold">
+                                <Trophy className="w-3.5 h-3.5" />
+                                Vencedor definido
                               </span>
                             )}
                           </div>
                         </div>
 
-                        {/* Closed Category Winner + Members Who Guessed Right Highlight */}
+                        <div className="p-5 sm:p-6 space-y-4">
+                          {/* Closed Category Winner + Members Who Guessed Right Highlight */}
                         {selectedEvent.status === 'closed' && winnerNominee && (
                           <div className="bg-[#111F15] border border-[#255436] rounded-md p-3.5 space-y-2.5">
                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2461,6 +2647,7 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
                             })}
                           </div>
                         )}
+                        </div>
                       </section>
                     );
                   })}
