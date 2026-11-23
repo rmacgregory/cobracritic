@@ -449,24 +449,26 @@ export function HomeView({
             O catálogo começa limpo para que o Grupo dos Cobras cadastre manualmente
             apenas os jogos que realmente importa avaliar, votar e discutir.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onOpenNewGame}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Cadastrar primeiro jogo</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleSeedStarters}
-              disabled={seeding}
-              className="px-5 py-2.5 text-sm font-medium border border-[#2F352F] bg-[#0C0D0C] text-[#F2F2EE] rounded-md hover:border-[#666B63] disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              {seeding ? 'Carregando exemplos...' : 'Carregar 4 jogos de exemplo'}
-            </button>
-          </div>
+          {user && (
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onOpenNewGame}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Cadastrar primeiro jogo</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSeedStarters}
+                disabled={seeding}
+                className="px-5 py-2.5 text-sm font-medium border border-[#2F352F] bg-[#0C0D0C] text-[#F2F2EE] rounded-md hover:border-[#666B63] disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {seeding ? 'Carregando exemplos...' : 'Carregar 4 jogos de exemplo'}
+              </button>
+            </div>
+          )}
         </section>
       </main>
     );
@@ -510,14 +512,15 @@ export function HomeView({
             </>
           )}
 
-          <div className="relative z-10 p-5 sm:p-7 lg:p-8 min-h-[250px] flex flex-col justify-between gap-6">
-            {/* Slide Body */}
+          <div className="relative z-10 p-5 sm:p-6 lg:p-7 h-[436px] sm:h-[372px] md:h-[336px] flex flex-col justify-between gap-4">
+            {/* Fixed-height Slide Body Wrapper */}
+            <div className="flex-1 min-h-0 flex items-center overflow-hidden">
             {currentSlide.kind === 'topGame' && (
-              <div className="flex flex-col md:flex-row md:items-center gap-6 lg:gap-8">
+              <div className="w-full flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 lg:gap-8">
                 <button
                   type="button"
                   onClick={() => onSelectGame(currentSlide.game.id)}
-                  className="w-[128px] sm:w-[152px] shrink-0 block text-left group cursor-pointer transition-transform duration-300 ease-out hover:scale-[1.02] will-change-transform motion-reduce:transform-none"
+                  className="w-[88px] sm:w-[128px] md:w-[144px] shrink-0 block text-left group cursor-pointer transition-transform duration-300 ease-out hover:scale-[1.02] will-change-transform motion-reduce:transform-none"
                 >
                   <GameCover
                     title={currentSlide.game.title}
@@ -529,8 +532,8 @@ export function HomeView({
                   />
                 </button>
 
-                <div className="min-w-0 flex-1 space-y-4">
-                  <div className="space-y-2">
+                <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
+                  <div className="space-y-1.5 sm:space-y-2">
                     <p className="text-xs font-medium text-[#4ADE80] flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span>
                         {currentSlide.game.averageScore !== null
@@ -545,7 +548,7 @@ export function HomeView({
                       </span>
                     </p>
 
-                    <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#F2F2EE] leading-[1.12] [text-wrap:balance]">
+                    <h1 className="font-display text-xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#F2F2EE] leading-[1.12] line-clamp-2 [text-wrap:balance]">
                       <button
                         type="button"
                         onClick={() => onSelectGame(currentSlide.game.id)}
@@ -555,7 +558,7 @@ export function HomeView({
                       </button>
                     </h1>
 
-                    <p className="text-xs sm:text-sm text-[#A8ACA5]">
+                    <p className="text-xs sm:text-sm text-[#A8ACA5] truncate">
                       <span>{currentSlide.game.developer}</span>
                       <span aria-hidden="true"> · </span>
                       <span>{currentSlide.game.genres.join(', ')}</span>
@@ -564,8 +567,8 @@ export function HomeView({
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-5 pt-3 border-t border-[#262B26]/80">
-                    <div className="flex flex-wrap items-center gap-5">
+                  <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-[#262B26]/80">
+                    <div className="flex flex-wrap items-center gap-4">
                       <ScoreBadge
                         score={currentSlide.game.averageScore}
                         size="lg"
@@ -573,7 +576,7 @@ export function HomeView({
                         reviewCount={currentSlide.game.reviewCount}
                       />
                       {currentSlide.game.reviewCount > 0 && (
-                        <div className="space-y-1.5 min-w-[160px]">
+                        <div className="hidden lg:block space-y-1.5 min-w-[160px]">
                           <div className="h-1.5 w-40 bg-[#222622] overflow-hidden flex rounded-full">
                             {currentSlide.game.positiveCount > 0 && (
                               <div
@@ -610,13 +613,15 @@ export function HomeView({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => onOpenReview(currentSlide.game)}
-                        className="px-4 py-2 text-xs sm:text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                      >
-                        Avaliar jogo
-                      </button>
+                      {user && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenReview(currentSlide.game)}
+                          className="px-4 py-2 text-xs sm:text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                        >
+                          Avaliar jogo
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => onSelectGame(currentSlide.game.id)}
@@ -632,11 +637,11 @@ export function HomeView({
             )}
 
             {currentSlide.kind === 'review' && (
-              <div className="flex flex-col md:flex-row md:items-center gap-6 lg:gap-8">
+              <div className="w-full flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 lg:gap-8">
                 <button
                   type="button"
                   onClick={() => onSelectGame(currentSlide.review.gameId)}
-                  className="w-[120px] sm:w-[144px] shrink-0 block text-left group cursor-pointer transition-transform duration-300 ease-out hover:scale-[1.02] will-change-transform motion-reduce:transform-none"
+                  className="w-[88px] sm:w-[128px] md:w-[144px] shrink-0 block text-left group cursor-pointer transition-transform duration-300 ease-out hover:scale-[1.02] will-change-transform motion-reduce:transform-none"
                 >
                   <GameCover
                     title={currentSlide.game?.title || currentSlide.review.gameTitle}
@@ -648,9 +653,9 @@ export function HomeView({
                   />
                 </button>
 
-                <div className="min-w-0 flex-1 space-y-4">
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                       <span className="font-medium text-[#4ADE80]">
                         {currentSlide.review.ratingOnly
                           ? 'Nova nota publicada'
@@ -662,7 +667,7 @@ export function HomeView({
                       <button
                         type="button"
                         onClick={() => onSelectGame(currentSlide.review.gameId)}
-                        className="text-[#C8CBC4] hover:text-[#F2F2EE] font-medium truncate cursor-pointer"
+                        className="text-[#C8CBC4] hover:text-[#F2F2EE] font-medium truncate max-w-[220px] sm:max-w-[320px] cursor-pointer"
                       >
                         {currentSlide.game?.title || currentSlide.review.gameTitle}
                       </button>
@@ -674,7 +679,7 @@ export function HomeView({
                       </span>
                     </div>
 
-                    <h2 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-[#F2F2EE] leading-[1.16] [text-wrap:balance]">
+                    <h2 className="font-display text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight text-[#F2F2EE] leading-[1.16] line-clamp-2 [text-wrap:balance]">
                       {currentSlide.review.ratingOnly
                         ? `${currentSlide.authorName} avaliou ${
                             currentSlide.game?.title || currentSlide.review.gameTitle
@@ -683,7 +688,7 @@ export function HomeView({
                     </h2>
 
                     {currentSlide.review.ratingOnly ? (
-                      <p className="text-sm text-[#90968C]">
+                      <p className="text-xs sm:text-sm text-[#90968C] truncate">
                         Avaliação registrada apenas com nota ·{' '}
                         {currentSlide.review.platformPlayed}
                         {currentSlide.review.hoursPlayed > 0
@@ -691,12 +696,12 @@ export function HomeView({
                           : ''}
                       </p>
                     ) : currentSlide.review.hasSpoiler ? (
-                      <p className="text-sm text-[#FBBF24] italic">
+                      <p className="text-xs sm:text-sm text-[#FBBF24] italic line-clamp-2">
                         Esta crítica foi marcada com spoilers — abra a ficha do jogo para
                         revelar o texto completo.
                       </p>
                     ) : (
-                      <p className="text-sm sm:text-[15px] text-[#C8CBC4] leading-relaxed line-clamp-2 max-w-2xl">
+                      <p className="text-xs sm:text-sm text-[#C8CBC4] leading-relaxed line-clamp-2 max-w-2xl">
                         {currentSlide.review.body}
                       </p>
                     )}
@@ -705,38 +710,69 @@ export function HomeView({
                   <div className="flex flex-wrap items-center justify-between gap-4 pt-3 border-t border-[#262B26]/80">
                     <div className="flex items-center gap-3.5 min-w-0">
                       <ScoreBadge score={currentSlide.review.score} size="md" />
-                      <button
-                        type="button"
-                        onClick={() => onSelectMember(currentSlide.review.authorId)}
-                        className="flex items-center gap-2.5 min-w-0 group cursor-pointer text-left"
-                      >
-                        <MemberAvatar
-                          name={currentSlide.authorName}
-                          primarySrc={currentSlide.authorPhotoURL}
-                          fallbackSrc={currentSlide.authorFallbackPhotoURL}
-                          size="sm"
-                        />
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <p className="text-sm font-medium text-[#F2F2EE] group-hover:text-[#4ADE80] transition-colors truncate">
-                              {currentSlide.authorName}
+                      {user ? (
+                        <button
+                          type="button"
+                          onClick={() => onSelectMember(currentSlide.review.authorId)}
+                          className="flex items-center gap-2.5 min-w-0 group cursor-pointer text-left"
+                        >
+                          <MemberAvatar
+                            name={currentSlide.authorName}
+                            primarySrc={currentSlide.authorPhotoURL}
+                            fallbackSrc={currentSlide.authorFallbackPhotoURL}
+                            size="sm"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="text-sm font-medium text-[#F2F2EE] group-hover:text-[#4ADE80] transition-colors truncate">
+                                {currentSlide.authorName}
+                              </p>
+                              {currentSlide.authorPlayStatus && (
+                                <span
+                                  className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border shrink-0 ${GAME_PLAY_STATUS_META[currentSlide.authorPlayStatus].activeClass}`}
+                                >
+                                  {GAME_PLAY_STATUS_META[currentSlide.authorPlayStatus].label}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-[#8C9288] truncate">
+                              {currentSlide.review.platformPlayed}
+                              {currentSlide.review.hoursPlayed > 0
+                                ? ` · ${currentSlide.review.hoursPlayed}h`
+                                : ''}
                             </p>
-                            {currentSlide.authorPlayStatus && (
-                              <span
-                                className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border shrink-0 ${GAME_PLAY_STATUS_META[currentSlide.authorPlayStatus].activeClass}`}
-                              >
-                                {GAME_PLAY_STATUS_META[currentSlide.authorPlayStatus].label}
-                              </span>
-                            )}
                           </div>
-                          <p className="text-xs text-[#8C9288] truncate">
-                            {currentSlide.review.platformPlayed}
-                            {currentSlide.review.hoursPlayed > 0
-                              ? ` · ${currentSlide.review.hoursPlayed}h`
-                              : ''}
-                          </p>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-2.5 min-w-0 text-left">
+                          <MemberAvatar
+                            name={currentSlide.authorName}
+                            primarySrc={currentSlide.authorPhotoURL}
+                            fallbackSrc={currentSlide.authorFallbackPhotoURL}
+                            size="sm"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <p className="text-sm font-medium text-[#F2F2EE] truncate">
+                                {currentSlide.authorName}
+                              </p>
+                              {currentSlide.authorPlayStatus && (
+                                <span
+                                  className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border shrink-0 ${GAME_PLAY_STATUS_META[currentSlide.authorPlayStatus].activeClass}`}
+                                >
+                                  {GAME_PLAY_STATUS_META[currentSlide.authorPlayStatus].label}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-[#8C9288] truncate">
+                              {currentSlide.review.platformPlayed}
+                              {currentSlide.review.hoursPlayed > 0
+                                ? ` · ${currentSlide.review.hoursPlayed}h`
+                                : ''}
+                            </p>
+                          </div>
                         </div>
-                      </button>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2.5">
@@ -775,9 +811,9 @@ export function HomeView({
               ).slice(0, 3);
 
               return (
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 lg:gap-8">
-                  <div className="min-w-0 flex-1 space-y-4">
-                    <div className="space-y-2">
+                <div className="w-full flex flex-col md:flex-row md:items-center justify-between gap-6 lg:gap-8">
+                  <div className="min-w-0 flex-1 space-y-3 sm:space-y-4">
+                    <div className="space-y-1.5 sm:space-y-2">
                       <p className="text-xs font-medium flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <span
                           className={
@@ -813,16 +849,16 @@ export function HomeView({
                         )}
                       </p>
 
-                      <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#F2F2EE] leading-[1.12] [text-wrap:balance]">
+                      <h2 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#F2F2EE] leading-[1.12] line-clamp-2 [text-wrap:balance]">
                         {ev.title}
                       </h2>
 
                       {ev.description ? (
-                        <p className="text-sm sm:text-[15px] text-[#C8CBC4] leading-relaxed line-clamp-2 max-w-2xl">
+                        <p className="text-xs sm:text-sm text-[#C8CBC4] leading-relaxed line-clamp-2 max-w-2xl">
                           {ev.description}
                         </p>
                       ) : (
-                        <p className="text-sm text-[#90968C]">
+                        <p className="text-xs sm:text-sm text-[#90968C] line-clamp-2">
                           {isNominating
                             ? 'Cada membro pode indicar 1 jogo para entrar na disputa.'
                             : 'Os votos são abertos para todo o grupo acompanhar em tempo real.'}
@@ -871,7 +907,13 @@ export function HomeView({
                           className="inline-flex items-center gap-1.5 px-4 py-2 text-xs sm:text-sm font-semibold bg-[#4ADE80] text-[#0C0D0C] rounded-md hover:bg-[#6EE79E] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                         >
                           <Vote className="w-4 h-4" />
-                          <span>{isNominating ? 'Indicar jogo' : 'Votar agora'}</span>
+                          <span>
+                            {user
+                              ? isNominating
+                                ? 'Indicar jogo'
+                                : 'Votar agora'
+                              : 'Ver evento'}
+                          </span>
                         </button>
                         <button
                           type="button"
@@ -901,6 +943,7 @@ export function HomeView({
                 </div>
               );
             })()}
+            </div>
 
             {/* Banner Rotation Controls Footer */}
             {slides.length > 1 && (
@@ -1119,15 +1162,17 @@ export function HomeView({
                               ? 'indicação enviada'
                               : 'indicações enviadas'}
                           </p>
-                          <p className="truncate text-[11px]">
-                            {myNomination ? (
-                              <span className="text-[#60A5FA]">
-                                Sua indicação: {myNomination.title}
-                              </span>
-                            ) : (
-                              <span>Você ainda não indicou seu jogo</span>
-                            )}
-                          </p>
+                          {user && (
+                            <p className="truncate text-[11px]">
+                              {myNomination ? (
+                                <span className="text-[#60A5FA]">
+                                  Sua indicação: {myNomination.title}
+                                </span>
+                              ) : (
+                                <span>Você ainda não indicou seu jogo</span>
+                              )}
+                            </p>
+                          )}
                         </>
                       ) : (
                         <>
@@ -1144,18 +1189,20 @@ export function HomeView({
                             </strong>{' '}
                             {evVotes.length === 1 ? 'voto' : 'votos'}
                           </p>
-                          <p className="text-[11px]">
-                            {myVotedCats > 0 ? (
-                              <span className="text-[#4ADE80]">
-                                Você votou em {myVotedCats}/{ev.categories.length}{' '}
-                                {ev.categories.length === 1
-                                  ? 'categoria'
-                                  : 'categorias'}
-                              </span>
-                            ) : (
-                              <span>Você ainda não votou neste evento</span>
-                            )}
-                          </p>
+                          {user && (
+                            <p className="text-[11px]">
+                              {myVotedCats > 0 ? (
+                                <span className="text-[#4ADE80]">
+                                  Você votou em {myVotedCats}/{ev.categories.length}{' '}
+                                  {ev.categories.length === 1
+                                    ? 'categoria'
+                                    : 'categorias'}
+                                </span>
+                              ) : (
+                                <span>Você ainda não votou neste evento</span>
+                              )}
+                            </p>
+                          )}
                         </>
                       )}
                     </div>
@@ -1166,7 +1213,13 @@ export function HomeView({
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
                     >
                       <Vote className="w-3.5 h-3.5" />
-                      <span>{isNominating ? 'Indicar jogo' : 'Votar agora'}</span>
+                      <span>
+                        {user
+                          ? isNominating
+                            ? 'Indicar jogo'
+                            : 'Votar agora'
+                          : 'Ver evento'}
+                      </span>
                     </button>
                   </div>
                 </article>

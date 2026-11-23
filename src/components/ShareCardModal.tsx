@@ -444,19 +444,27 @@ async function renderShareCardToDataUrl(payload: ShareCardPayload): Promise<stri
       ctx.fillText(wrapText(ctx, scorersLine, width - 260, 1)[0] || scorersLine, 130, boxY + 90);
     }
   } else {
-    // Retrospective Card
+    // Retrospective Card (by game release year)
     ctx.fillStyle = '#4ADE80';
-    ctx.font = '700 28px "IBM Plex Mono", monospace';
-    ctx.fillText(`RESUMO ANUAL DOS COBRAS · ${payload.year}`, 96, 232);
+    ctx.font = '700 24px "IBM Plex Mono", monospace';
+    ctx.fillText(`JOGOS LANÇADOS EM ${payload.year} · COBRAS`, 96, 224);
 
     ctx.fillStyle = '#F2F2EE';
-    ctx.font = '700 62px Outfit, sans-serif';
-    ctx.fillText(`Retrospectiva ${payload.year}`, 96, 310);
+    ctx.font = '700 58px Outfit, sans-serif';
+    ctx.fillText(`Retrospectiva ${payload.year}`, 96, 294);
+
+    ctx.fillStyle = '#90968C';
+    ctx.font = '500 21px "Plus Jakarta Sans", sans-serif';
+    ctx.fillText(
+      `Apenas jogos lançados em ${payload.year} (independente de quando foram jogados)`,
+      96,
+      332,
+    );
 
     // 4 KPI Boxes
     const kpis = [
-      { label: 'Críticas', value: String(payload.totalReviews) },
-      { label: 'Jogos avaliados', value: String(payload.totalGames) },
+      { label: `Críticas (jogos de ${payload.year})`, value: String(payload.totalReviews) },
+      { label: 'Lançamentos avaliados', value: String(payload.totalGames) },
       { label: 'Média do grupo', value: payload.avgScore !== null ? String(payload.avgScore) : '—' },
       { label: 'Horas jogadas', value: `${Math.round(payload.totalHours)}h` },
     ];
@@ -465,8 +473,8 @@ async function renderShareCardToDataUrl(payload: ShareCardPayload): Promise<stri
       const col = i % 2;
       const row = Math.floor(i / 2);
       const x = 96 + col * (boxW + 36);
-      const y = 360 + row * 150;
-      drawRoundedRect(ctx, x, y, boxW, 126, 12);
+      const y = 368 + row * 148;
+      drawRoundedRect(ctx, x, y, boxW, 124, 12);
       ctx.fillStyle = '#0F110F';
       ctx.fill();
       ctx.strokeStyle = '#252B25';
@@ -474,34 +482,34 @@ async function renderShareCardToDataUrl(payload: ShareCardPayload): Promise<stri
       ctx.stroke();
 
       ctx.fillStyle = '#8C9288';
-      ctx.font = '500 23px "Plus Jakarta Sans", sans-serif';
+      ctx.font = '500 22px "Plus Jakarta Sans", sans-serif';
       ctx.fillText(kpi.label, x + 28, y + 46);
 
       ctx.fillStyle = '#4ADE80';
-      ctx.font = '700 50px "IBM Plex Mono", monospace';
-      ctx.fillText(kpi.value, x + 28, y + 104);
+      ctx.font = '700 48px "IBM Plex Mono", monospace';
+      ctx.fillText(kpi.value, x + 28, y + 102);
     });
 
     // Highlights
     const highlights = [
       {
-        kicker: 'JOGO DO ANO DOS COBRAS',
+        kicker: `MELHOR JOGO LANÇADO EM ${payload.year}`,
         title: payload.gotyTitle || '—',
         meta: payload.gotyScore !== null ? `Média ${payload.gotyScore}/100` : '',
         color: '#4ADE80',
       },
       {
-        kicker: 'MAIOR POLÊMICA DO ANO',
+        kicker: `MAIOR POLÊMICA (LANÇAMENTOS ${payload.year})`,
         title: payload.controversialTitle || '—',
         meta: payload.controversialRange,
         color: '#FBBF24',
       },
       {
-        kicker: 'CRÍTICO MAIS ATIVO',
+        kicker: `MAIS AVALIOU JOGOS DE ${payload.year}`,
         title: payload.mostActiveMember || '—',
         meta:
           payload.mostActiveCount > 0
-            ? `${payload.mostActiveCount} ${payload.mostActiveCount === 1 ? 'avaliação' : 'avaliações'} no ano`
+            ? `${payload.mostActiveCount} ${payload.mostActiveCount === 1 ? 'avaliação' : 'avaliações'} em jogos de ${payload.year}`
             : '',
         color: '#60A5FA',
       },

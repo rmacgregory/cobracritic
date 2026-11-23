@@ -13,7 +13,7 @@ export function GlobalSearchBar({
   onSelectGame,
   onSelectMember,
 }: GlobalSearchBarProps) {
-  const { gamesWithStats, members, reviews } = useVeredito();
+  const { user, gamesWithStats, members, reviews } = useVeredito();
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -53,7 +53,7 @@ export function GlobalSearchBar({
   }, [gamesWithStats, trimmed]);
 
   const matchingMembers = useMemo(() => {
-    if (!trimmed) return [];
+    if (!user || !trimmed) return [];
     return members
       .filter(
         (m) =>
@@ -61,7 +61,7 @@ export function GlobalSearchBar({
           (m.topFiveGames || []).some((g) => g.toLowerCase().includes(trimmed)),
       )
       .slice(0, 5);
-  }, [members, trimmed]);
+  }, [user, members, trimmed]);
 
   const hasResults = matchingGames.length > 0 || matchingMembers.length > 0;
 
@@ -82,8 +82,10 @@ export function GlobalSearchBar({
               setOpen(false);
             }
           }}
-          placeholder="Buscar jogos ou membros..."
-          aria-label="Busca global por jogos ou membros"
+          placeholder={user ? 'Buscar jogos ou membros...' : 'Buscar jogos...'}
+          aria-label={
+            user ? 'Busca global por jogos ou membros' : 'Busca global por jogos'
+          }
           className="w-full pl-9 pr-8 py-2 text-sm bg-[#141614] border border-[#262A26] rounded-md text-[#F2F2EE] placeholder:text-[#787D75] focus:outline-none focus:border-[#4ADE80] transition-colors"
         />
         {query && (
@@ -110,7 +112,9 @@ export function GlobalSearchBar({
           {!hasResults ? (
             <div className="px-4 py-5 text-center">
               <p className="text-xs text-[#90968C]">
-                Nenhum jogo ou membro encontrado para “{query.trim()}”.
+                {user
+                  ? `Nenhum jogo ou membro encontrado para “${query.trim()}”.`
+                  : `Nenhum jogo encontrado para “${query.trim()}”.`}
               </p>
             </div>
           ) : (

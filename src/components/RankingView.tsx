@@ -9,7 +9,7 @@ interface RankingViewProps {
 }
 
 export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) {
-  const { gamesWithStats, reviews, members } = useVeredito();
+  const { user, gamesWithStats, reviews, members } = useVeredito();
 
   const rankedGames = useMemo(() => {
     return gamesWithStats
@@ -194,7 +194,10 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
 
       {/* Divisive Games & Group Critics */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        <section aria-label="Jogos mais polêmicos" className="lg:col-span-5 space-y-4">
+        <section
+          aria-label="Jogos mais polêmicos"
+          className={`${user ? 'lg:col-span-5' : 'lg:col-span-12'} space-y-4`}
+        >
           <div>
             <h2 className="font-serif text-2xl font-medium text-[#F2F2EE]">
               Mais Polêmicos
@@ -234,55 +237,57 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
           )}
         </section>
 
-        <section aria-label="Críticos do grupo" className="lg:col-span-7 space-y-4">
-          <div>
-            <h2 className="font-serif text-2xl font-medium text-[#F2F2EE]">
-              Críticos dos Cobras
-            </h2>
-            <p className="text-xs text-[#8C9288] mt-1">
-              Média histórica das notas dadas por cada membro.
-            </p>
-          </div>
+        {user && (
+          <section aria-label="Críticos do grupo" className="lg:col-span-7 space-y-4">
+            <div>
+              <h2 className="font-serif text-2xl font-medium text-[#F2F2EE]">
+                Críticos dos Cobras
+              </h2>
+              <p className="text-xs text-[#8C9288] mt-1">
+                Média histórica das notas dadas por cada membro.
+              </p>
+            </div>
 
-          <div className="bg-[#141614] border border-[#262A26] overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-[#262A26] text-xs font-mono text-[#8C9288]">
-                  <th className="py-3 px-4 font-medium">Integrante</th>
-                  <th className="py-3 px-4 font-medium">Críticas</th>
-                  <th className="py-3 px-4 font-medium hidden sm:table-cell">
-                    Maior nota
-                  </th>
-                  <th className="py-3 px-4 font-medium text-right">Média dada</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#202420] text-sm">
-                {criticStats.map((critic) => (
-                  <tr
-                    key={critic.uid}
-                    onClick={() => onSelectMember(critic.uid)}
-                    className="hover:bg-[#1A1D1A] transition-colors cursor-pointer"
-                  >
-                    <td className="py-3.5 px-4 font-medium text-[#F2F2EE]">
-                      {critic.name}
-                    </td>
-                    <td className="py-3.5 px-4 font-mono text-xs text-[#A8ACA5] tabular-nums">
-                      {critic.reviewCount}
-                    </td>
-                    <td className="py-3.5 px-4 text-xs text-[#8C9288] hidden sm:table-cell truncate max-w-[200px]">
-                      {critic.highestScore >= 0
-                        ? `${critic.highestTitle} (${critic.highestScore})`
-                        : '—'}
-                    </td>
-                    <td className="py-3.5 px-4 text-right font-mono font-semibold text-[#F2F2EE] tabular-nums">
-                      {critic.averageGiven !== null ? critic.averageGiven : '—'}
-                    </td>
+            <div className="bg-[#141614] border border-[#262A26] overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-[#262A26] text-xs font-mono text-[#8C9288]">
+                    <th className="py-3 px-4 font-medium">Integrante</th>
+                    <th className="py-3 px-4 font-medium">Críticas</th>
+                    <th className="py-3 px-4 font-medium hidden sm:table-cell">
+                      Maior nota
+                    </th>
+                    <th className="py-3 px-4 font-medium text-right">Média dada</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
+                </thead>
+                <tbody className="divide-y divide-[#202420] text-sm">
+                  {criticStats.map((critic) => (
+                    <tr
+                      key={critic.uid}
+                      onClick={() => onSelectMember(critic.uid)}
+                      className="hover:bg-[#1A1D1A] transition-colors cursor-pointer"
+                    >
+                      <td className="py-3.5 px-4 font-medium text-[#F2F2EE]">
+                        {critic.name}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-xs text-[#A8ACA5] tabular-nums">
+                        {critic.reviewCount}
+                      </td>
+                      <td className="py-3.5 px-4 text-xs text-[#8C9288] hidden sm:table-cell truncate max-w-[200px]">
+                        {critic.highestScore >= 0
+                          ? `${critic.highestTitle} (${critic.highestScore})`
+                          : '—'}
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-[#F2F2EE] tabular-nums">
+                        {critic.averageGiven !== null ? critic.averageGiven : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );

@@ -2892,175 +2892,183 @@ export function EventsView({
                     )}
                   </div>
 
-                  {/* My Current Nomination */}
-                  {myNomination ? (
-                    <div className="bg-[#111925] border border-[#2A4C7C] rounded-md p-4 flex flex-wrap items-center justify-between gap-4">
-                      <div className="flex items-center gap-3.5 min-w-0">
-                        <GameCover
-                          title={myNomination.title}
-                          coverUrl={
-                            (myNomination.gameId
-                              ? gamesById[myNomination.gameId]?.coverUrl
-                              : '') || myNomination.coverUrl
-                          }
-                          compact
-                          className="w-12 shrink-0 rounded-[2px]"
-                        />
-                        <div className="min-w-0">
-                          <p className="text-[11px] font-mono uppercase tracking-wider text-[#60A5FA]">
-                            Sua indicação atual (1/1)
-                          </p>
-                          <p className="font-display text-lg font-semibold text-[#F2F2EE] truncate">
-                            {myNomination.title}
-                          </p>
-                          <p className="text-xs text-[#90968C]">
-                            Clique em outro jogo abaixo para substituir ou remova sua indicação.
-                          </p>
-                        </div>
-                      </div>
+                  {/* My Current Nomination & Picker (members only) */}
+                  {user ? (
+                    <>
+                      {myNomination ? (
+                        <div className="bg-[#111925] border border-[#2A4C7C] rounded-md p-4 flex flex-wrap items-center justify-between gap-4">
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <GameCover
+                              title={myNomination.title}
+                              coverUrl={
+                                (myNomination.gameId
+                                  ? gamesById[myNomination.gameId]?.coverUrl
+                                  : '') || myNomination.coverUrl
+                              }
+                              compact
+                              className="w-12 shrink-0 rounded-[2px]"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-mono uppercase tracking-wider text-[#60A5FA]">
+                                Sua indicação atual (1/1)
+                              </p>
+                              <p className="font-display text-lg font-semibold text-[#F2F2EE] truncate">
+                                {myNomination.title}
+                              </p>
+                              <p className="text-xs text-[#90968C]">
+                                Clique em outro jogo abaixo para substituir ou remova sua indicação.
+                              </p>
+                            </div>
+                          </div>
 
-                      <button
-                        type="button"
-                        disabled={busyAction === 'remove-nomination'}
-                        onClick={() => handleRemoveMemberNomination()}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#522626] bg-[#1D1313] text-[#FCA5A5] hover:bg-[#2A1818] rounded-md cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Remover indicação</span>
-                      </button>
-                    </div>
+                          <button
+                            type="button"
+                            disabled={busyAction === 'remove-nomination'}
+                            onClick={() => handleRemoveMemberNomination()}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-[#522626] bg-[#1D1313] text-[#FCA5A5] hover:bg-[#2A1818] rounded-md cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Remover indicação</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-[#93C5FD] bg-[#101722] border border-[#22395B] rounded-md px-3.5 py-2.5">
+                          Você ainda não indicou nenhum jogo. Selecione 1 jogo abaixo para registrar
+                          sua indicação.
+                        </p>
+                      )}
+
+                      {/* Picker to nominate 1 game */}
+                      <div className="space-y-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-[#C8CBC4]">
+                            {myNomination ? 'Trocar minha indicação:' : 'Escolher meu jogo indicado:'}
+                          </span>
+                          <div className="inline-flex rounded-md border border-[#262B26] bg-[#0C0D0C] p-0.5 text-[11px]">
+                            <button
+                              type="button"
+                              onClick={() => setNominationTab('catalog')}
+                              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                                nominationTab === 'catalog'
+                                  ? 'bg-[#1D221D] text-[#60A5FA] font-medium'
+                                  : 'text-[#8C9288] hover:text-[#F2F2EE]'
+                              }`}
+                            >
+                              Catálogo ({games.length})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setNominationTab('manual')}
+                              className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
+                                nominationTab === 'manual'
+                                  ? 'bg-[#1D221D] text-[#60A5FA] font-medium'
+                                  : 'text-[#8C9288] hover:text-[#F2F2EE]'
+                              }`}
+                            >
+                              Digitar outro jogo
+                            </button>
+                          </div>
+                        </div>
+
+                        {nominationTab === 'catalog' ? (
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <Search className="w-3.5 h-3.5 text-[#666B63] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                              <input
+                                type="text"
+                                value={nominationSearch}
+                                onChange={(e) => setNominationSearch(e.target.value)}
+                                placeholder="Buscar jogo no catálogo dos Cobras..."
+                                className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-[#0C0D0C] border border-[#262B26] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#60A5FA]"
+                              />
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto pr-0.5">
+                              {filteredNominationGames.map((g) => {
+                                const isMine = myNomination?.gameId === g.id;
+                                return (
+                                  <button
+                                    key={g.id}
+                                    type="button"
+                                    disabled={busyAction === 'nominate'}
+                                    onClick={() =>
+                                      handleSubmitMemberNomination({
+                                        gameId: g.id,
+                                        title: g.title,
+                                        coverUrl: g.coverUrl || '',
+                                      })
+                                    }
+                                    className={`flex items-center gap-2.5 p-2 rounded-md border text-left transition-colors cursor-pointer ${
+                                      isMine
+                                        ? 'bg-[#121D2D] border-[#60A5FA] text-[#F2F2EE]'
+                                        : 'bg-[#0C0D0C] border-[#262B26] hover:border-[#60A5FA]/60 text-[#C8CBC4]'
+                                    }`}
+                                  >
+                                    <GameCover
+                                      title={g.title}
+                                      coverUrl={g.coverUrl}
+                                      compact
+                                      className="w-8 shrink-0 rounded-[2px]"
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-xs font-medium text-[#F2F2EE] truncate">
+                                        {g.title}
+                                      </p>
+                                      <p className="text-[11px] text-[#787D75] truncate tabular-nums">
+                                        {g.releaseYear} · {g.developer}
+                                      </p>
+                                    </div>
+                                    {isMine && <Check className="w-4 h-4 text-[#60A5FA] shrink-0" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <form
+                            onSubmit={(e) => {
+                              e.preventDefault();
+                              if (!nominationManualTitle.trim()) return;
+                              void handleSubmitMemberNomination({
+                                gameId: '',
+                                title: nominationManualTitle.trim(),
+                                coverUrl: nominationManualCover.trim(),
+                              });
+                            }}
+                            className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2"
+                          >
+                            <input
+                              type="text"
+                              required
+                              maxLength={LIMITS.EVENT_NOMINEE_TITLE_MAX}
+                              value={nominationManualTitle}
+                              onChange={(e) => setNominationManualTitle(e.target.value)}
+                              placeholder="Nome do jogo que deseja indicar..."
+                              className="px-3 py-2 text-xs bg-[#0C0D0C] border border-[#262B26] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#60A5FA]"
+                            />
+                            <input
+                              type="url"
+                              maxLength={LIMITS.URL_MAX}
+                              value={nominationManualCover}
+                              onChange={(e) => setNominationManualCover(e.target.value)}
+                              placeholder="URL da capa https://... (opcional)"
+                              className="px-3 py-2 text-xs bg-[#0C0D0C] border border-[#262B26] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#60A5FA]"
+                            />
+                            <button
+                              type="submit"
+                              disabled={!nominationManualTitle.trim() || busyAction === 'nominate'}
+                              className="px-4 py-2 text-xs font-semibold bg-[#60A5FA] text-[#0C0D0C] rounded-md hover:bg-[#93C5FD] disabled:opacity-40 cursor-pointer"
+                            >
+                              {myNomination ? 'Substituir' : 'Indicar'}
+                            </button>
+                          </form>
+                        )}
+                      </div>
+                    </>
                   ) : (
-                    <p className="text-xs text-[#93C5FD] bg-[#101722] border border-[#22395B] rounded-md px-3.5 py-2.5">
-                      Você ainda não indicou nenhum jogo. Selecione 1 jogo abaixo para registrar
-                      sua indicação.
+                    <p className="text-xs text-[#90968C] bg-[#0F110F] border border-[#232823] rounded-md px-3.5 py-2.5">
+                      Modo somente leitura — acompanhe abaixo as indicações enviadas pelo grupo.
                     </p>
                   )}
-
-                  {/* Picker to nominate 1 game */}
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-[#C8CBC4]">
-                        {myNomination ? 'Trocar minha indicação:' : 'Escolher meu jogo indicado:'}
-                      </span>
-                      <div className="inline-flex rounded-md border border-[#262B26] bg-[#0C0D0C] p-0.5 text-[11px]">
-                        <button
-                          type="button"
-                          onClick={() => setNominationTab('catalog')}
-                          className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
-                            nominationTab === 'catalog'
-                              ? 'bg-[#1D221D] text-[#60A5FA] font-medium'
-                              : 'text-[#8C9288] hover:text-[#F2F2EE]'
-                          }`}
-                        >
-                          Catálogo ({games.length})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setNominationTab('manual')}
-                          className={`px-2.5 py-1 rounded transition-colors cursor-pointer ${
-                            nominationTab === 'manual'
-                              ? 'bg-[#1D221D] text-[#60A5FA] font-medium'
-                              : 'text-[#8C9288] hover:text-[#F2F2EE]'
-                          }`}
-                        >
-                          Digitar outro jogo
-                        </button>
-                      </div>
-                    </div>
-
-                    {nominationTab === 'catalog' ? (
-                      <div className="space-y-3">
-                        <div className="relative">
-                          <Search className="w-3.5 h-3.5 text-[#666B63] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                          <input
-                            type="text"
-                            value={nominationSearch}
-                            onChange={(e) => setNominationSearch(e.target.value)}
-                            placeholder="Buscar jogo no catálogo dos Cobras..."
-                            className="w-full pl-9 pr-3 py-2 text-xs sm:text-sm bg-[#0C0D0C] border border-[#262B26] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#60A5FA]"
-                          />
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-[280px] overflow-y-auto pr-0.5">
-                          {filteredNominationGames.map((g) => {
-                            const isMine = myNomination?.gameId === g.id;
-                            return (
-                              <button
-                                key={g.id}
-                                type="button"
-                                disabled={busyAction === 'nominate'}
-                                onClick={() =>
-                                  handleSubmitMemberNomination({
-                                    gameId: g.id,
-                                    title: g.title,
-                                    coverUrl: g.coverUrl || '',
-                                  })
-                                }
-                                className={`flex items-center gap-2.5 p-2 rounded-md border text-left transition-colors cursor-pointer ${
-                                  isMine
-                                    ? 'bg-[#121D2D] border-[#60A5FA] text-[#F2F2EE]'
-                                    : 'bg-[#0C0D0C] border-[#262B26] hover:border-[#60A5FA]/60 text-[#C8CBC4]'
-                                }`}
-                              >
-                                <GameCover
-                                  title={g.title}
-                                  coverUrl={g.coverUrl}
-                                  compact
-                                  className="w-8 shrink-0 rounded-[2px]"
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <p className="text-xs font-medium text-[#F2F2EE] truncate">
-                                    {g.title}
-                                  </p>
-                                  <p className="text-[11px] text-[#787D75] truncate tabular-nums">
-                                    {g.releaseYear} · {g.developer}
-                                  </p>
-                                </div>
-                                {isMine && <Check className="w-4 h-4 text-[#60A5FA] shrink-0" />}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          if (!nominationManualTitle.trim()) return;
-                          void handleSubmitMemberNomination({
-                            gameId: '',
-                            title: nominationManualTitle.trim(),
-                            coverUrl: nominationManualCover.trim(),
-                          });
-                        }}
-                        className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2"
-                      >
-                        <input
-                          type="text"
-                          required
-                          maxLength={LIMITS.EVENT_NOMINEE_TITLE_MAX}
-                          value={nominationManualTitle}
-                          onChange={(e) => setNominationManualTitle(e.target.value)}
-                          placeholder="Nome do jogo que deseja indicar..."
-                          className="px-3 py-2 text-xs bg-[#0C0D0C] border border-[#262B26] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#60A5FA]"
-                        />
-                        <input
-                          type="url"
-                          maxLength={LIMITS.URL_MAX}
-                          value={nominationManualCover}
-                          onChange={(e) => setNominationManualCover(e.target.value)}
-                          placeholder="URL da capa https://... (opcional)"
-                          className="px-3 py-2 text-xs bg-[#0C0D0C] border border-[#262B26] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#60A5FA]"
-                        />
-                        <button
-                          type="submit"
-                          disabled={!nominationManualTitle.trim() || busyAction === 'nominate'}
-                          className="px-4 py-2 text-xs font-semibold bg-[#60A5FA] text-[#0C0D0C] rounded-md hover:bg-[#93C5FD] disabled:opacity-40 cursor-pointer"
-                        >
-                          {myNomination ? 'Substituir' : 'Indicar'}
-                        </button>
-                      </form>
-                    )}
-                  </div>
 
                   {/* All Member Nominations List */}
                   <div className="pt-4 border-t border-[#222933] space-y-3">
@@ -3597,7 +3605,7 @@ export function EventsView({
                                             {catVotes.length > 0 ? ` (${votePct}%)` : ''}
                                           </span>
 
-                                          {selectedEvent.status === 'active' && (
+                                          {selectedEvent.status === 'active' && user && (
                                             <button
                                               type="button"
                                               disabled={voteBusy}

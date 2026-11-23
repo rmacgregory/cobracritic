@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ban, Check, Copy, Eye, LogOut, Menu, Plus, Shield } from 'lucide-react';
+import { Ban, Check, Copy, Eye, LogIn, LogOut, Menu, Plus, Shield } from 'lucide-react';
 import { AdminPanelView } from './components/AdminPanelView';
 import { AuthGate } from './components/AuthGate';
 import { CatalogView } from './components/CatalogView';
@@ -44,6 +44,10 @@ function CobraCriticShell() {
     gamesWithStats,
     members,
     myStatusByGame,
+    registrationLocked,
+    readOnlyMode,
+    enterReadOnlyMode,
+    exitReadOnlyMode,
     signInWithGoogle,
     signInWithAdminCredentials,
     signOutUser,
@@ -114,6 +118,7 @@ function CobraCriticShell() {
   };
 
   const handleSelectMember = (memberUid: string | null) => {
+    if (!user) return;
     setActiveTab('members');
     setSelectedGameId(null);
     setSelectedMemberId(memberUid);
@@ -136,22 +141,23 @@ function CobraCriticShell() {
   };
 
   const handleOpenNewGame = () => {
+    if (!user) return;
     setEditingGame(null);
     setShowGameModal(true);
   };
 
   const handleOpenEditGame = (game: GameWithStats) => {
+    if (!user) return;
     setEditingGame(game);
     setShowGameModal(true);
   };
 
   const handleOpenReview = (game: GameWithStats, existing?: Review | null) => {
+    if (!user) return;
     const foundExisting =
       existing !== undefined
         ? existing
-        : user
-          ? game.reviews.find((r) => r.authorId === user.uid) || null
-          : null;
+        : game.reviews.find((r) => r.authorId === user.uid) || null;
     setReviewModalTarget({ game, existing: foundExisting });
   };
 
@@ -163,11 +169,13 @@ function CobraCriticShell() {
     );
   }
 
-  if (!user) {
+  if (!user && !readOnlyMode) {
     return (
       <AuthGate
         onSignIn={signInWithGoogle}
         onAdminSignIn={signInWithAdminCredentials}
+        onEnterReadOnly={enterReadOnlyMode}
+        registrationLocked={registrationLocked}
         signingIn={signingIn}
         authError={authError}
         adminAuthError={adminAuthError}
@@ -215,7 +223,7 @@ function CobraCriticShell() {
     );
   }
 
-  if (profileSetupPending && !isRealAdmin) {
+  if (user && profileSetupPending && !isRealAdmin) {
     return (
       <div className="min-h-screen bg-[#0C0D0C] text-[#F2F2EE] flex flex-col items-center justify-center px-4 py-12">
         <div className="w-full max-w-lg bg-[#141614] border border-[#262A26] p-8 space-y-5">
@@ -292,7 +300,10 @@ function CobraCriticShell() {
   };
 
   const effectiveTab: ActiveTab =
-    activeTab === 'admin' && !isAdmin ? 'home' : activeTab;
+    (activeTab === 'admin' && !isAdmin) ||
+    ((activeTab === 'profile' || activeTab === 'members') && !user)
+      ? 'home'
+      : activeTab;
 
   const breadcrumbTrail: string[] = [tabLabels[effectiveTab]];
   if (selectedGame) {
@@ -362,58 +373,79 @@ function CobraCriticShell() {
           />
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {isRealAdmin && (
-              <button
-                type="button"
-                onClick={toggleViewAsMember}
-                aria-pressed={viewAsMember}
-                title={
-                  viewAsMember
-                    ? 'Você está vendo o site como usuário comum. Clique para voltar ao modo Admin.'
-                    : 'Visualizar o site como um usuário comum'
-                }
-                aria-label={
-                  viewAsMember
-                    ? 'Sair da visualização de usuário comum e voltar ao modo Admin'
-                    : 'Ver o site como usuário comum'
-                }
-                className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  viewAsMember
-                    ? 'bg-[#241D0F] border-[#FBBF24]/70 text-[#FDE68A] hover:bg-[#2E2512]'
-                    : 'bg-[#141614] border-[#262A26] text-[#A8ACA5] hover:text-[#F2F2EE] hover:border-[#3A433A]'
-                }`}
-              >
-                {viewAsMember ? (
-                  <>
-                    <Shield className="w-3.5 h-3.5 text-[#FBBF24] shrink-0" />
-                    <span className="hidden sm:inline">Modo usuário · Voltar p/ Admin</span>
-                    <span className="sm:hidden">Voltar Admin</span>
-                  </>
-                ) : (
-                  <>
-                    <Eye className="w-3.5 h-3.5 shrink-0" />
-                    <span className="hidden md:inline">Ver como usuário</span>
-                  </>
+            {!user && readOnlyMode ? (
+              <>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded-md bg-[#13261A] border border-[#2C6B41] text-[#86EFAC] whitespace-nowrap shrink-0">
+                  <Eye className="w-3.5 h-3.5 shrink-0" />
+                  <span className="hidden sm:inline">Modo somente leitura</span>
+                  <span className="sm:hidden">Leitura</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={exitReadOnlyMode}
+                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs sm:text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <LogIn className="w-4 h-4 shrink-0" />
+                  <span className="hidden sm:inline">Voltar ao login</span>
+                  <span className="sm:hidden">Login</span>
+                </button>
+              </>
+            ) : (
+              <>
+                {isRealAdmin && (
+                  <button
+                    type="button"
+                    onClick={toggleViewAsMember}
+                    aria-pressed={viewAsMember}
+                    title={
+                      viewAsMember
+                        ? 'Você está vendo o site como usuário comum. Clique para voltar ao modo Admin.'
+                        : 'Visualizar o site como um usuário comum'
+                    }
+                    aria-label={
+                      viewAsMember
+                        ? 'Sair da visualização de usuário comum e voltar ao modo Admin'
+                        : 'Ver o site como usuário comum'
+                    }
+                    className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-2 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                      viewAsMember
+                        ? 'bg-[#241D0F] border-[#FBBF24]/70 text-[#FDE68A] hover:bg-[#2E2512]'
+                        : 'bg-[#141614] border-[#262A26] text-[#A8ACA5] hover:text-[#F2F2EE] hover:border-[#3A433A]'
+                    }`}
+                  >
+                    {viewAsMember ? (
+                      <>
+                        <Shield className="w-3.5 h-3.5 text-[#FBBF24] shrink-0" />
+                        <span className="hidden sm:inline">Modo usuário · Voltar p/ Admin</span>
+                        <span className="sm:hidden">Voltar Admin</span>
+                      </>
+                    ) : (
+                      <>
+                        <Eye className="w-3.5 h-3.5 shrink-0" />
+                        <span className="hidden md:inline">Ver como usuário</span>
+                      </>
+                    )}
+                  </button>
                 )}
-              </button>
+
+                <NotificationsBell
+                  onSelectGame={handleSelectGame}
+                  onEditGame={handleOpenEditGame}
+                  onSelectEvents={() => handleSelectTab('events')}
+                  onOpenNotificationSettings={handleOpenNotificationSettings}
+                />
+
+                <button
+                  type="button"
+                  onClick={handleOpenNewGame}
+                  className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Cadastrar jogo</span>
+                  <span className="sm:hidden">Novo</span>
+                </button>
+              </>
             )}
-
-            <NotificationsBell
-              onSelectGame={handleSelectGame}
-              onEditGame={handleOpenEditGame}
-              onSelectEvents={() => handleSelectTab('events')}
-              onOpenNotificationSettings={handleOpenNotificationSettings}
-            />
-
-            <button
-              type="button"
-              onClick={handleOpenNewGame}
-              className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Cadastrar jogo</span>
-              <span className="sm:hidden">Novo</span>
-            </button>
           </div>
         </header>
 
@@ -424,7 +456,7 @@ function CobraCriticShell() {
               onBack={() => setSelectedGameId(null)}
               onOpenReview={handleOpenReview}
               onEditGame={handleOpenEditGame}
-              onSelectAuthor={(uid) => handleSelectMember(uid)}
+              onSelectAuthor={user ? (uid) => handleSelectMember(uid) : undefined}
             />
           ) : effectiveTab === 'home' ? (
             <HomeView
@@ -450,7 +482,7 @@ function CobraCriticShell() {
           ) : effectiveTab === 'feed' ? (
             <SocialFeedView
               onSelectGame={handleSelectGame}
-              onSelectAuthor={(uid) => handleSelectMember(uid)}
+              onSelectAuthor={user ? (uid) => handleSelectMember(uid) : undefined}
               onEditReview={(game, rev) => handleOpenReview(game, rev)}
               onGoToCatalog={() => handleSelectTab('catalog')}
             />

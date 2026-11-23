@@ -15,6 +15,7 @@ export function FeaturedRoundBanner({
   onOpenReview,
 }: FeaturedRoundBannerProps) {
   const {
+    user,
     isAdmin,
     featuredRound,
     gamesWithStats,
@@ -145,7 +146,7 @@ export function FeaturedRoundBanner({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {linkedGame && (
+          {user && linkedGame && (
             <button
               type="button"
               disabled={busy}
@@ -161,7 +162,7 @@ export function FeaturedRoundBanner({
             </button>
           )}
 
-          {linkedGame && onOpenReview && (
+          {user && linkedGame && onOpenReview && (
             <button
               type="button"
               onClick={() => onOpenReview(linkedGame)}

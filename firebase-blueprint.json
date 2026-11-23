@@ -959,6 +959,47 @@
         "visibility",
         "updatedAt"
       ]
+    },
+    "AccessControlConfig": {
+      "title": "AccessControlConfig",
+      "description": "Admin-managed registration lock setting stored at /groupConfig/accessControl. When registrationLocked is true, new member sign-ups are blocked and guests may browse in read-only mode.",
+      "type": "object",
+      "properties": {
+        "registrationLocked": {
+          "type": "boolean",
+          "description": "Whether new registrations / Google sign-in button are locked."
+        },
+        "updatedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the admin who last updated the access control setting."
+        },
+        "updatedByName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the admin who last updated the setting."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group scope identifier."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of update."
+        }
+      },
+      "required": [
+        "registrationLocked",
+        "updatedBy",
+        "updatedByName",
+        "visibility",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -1008,7 +1049,7 @@
     },
     "/groupConfig/{configId}": {
       "schema": { "$ref": "#/entities/FeaturedRoundConfig" },
-      "description": "Admin-managed shared group highlights such as the pinned Game of the Round (featuredRound)."
+      "description": "Admin-managed shared group settings: featuredRound (FeaturedRoundConfig) and accessControl (AccessControlConfig)."
     },
     "/coverReports/{reportId}": {
       "schema": { "$ref": "#/entities/CoverReport" },

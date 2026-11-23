@@ -87,9 +87,9 @@ Principais pilares da plataforma:
 
 ### 6. Ranking e Retrospectiva do Ano
 - **Ranking Geral**: classificação de todos os jogos avaliados usando **média ponderada bayesiana** (equilibrando nota e volume de avaliações), além dos **Jogos Mais Divisivos** (maior desvio padrão) e estatísticas por crítico.
-- **Retrospectiva do Ano (Resumo Anual dos Cobras)**:
-  - seletor por ano com totais de críticas, jogos avaliados, horas jogadas, comentários e média geral;
-  - destaques anuais: **Jogo do Ano**, **Mais Polêmico**, **Maior Consenso**, top gêneros mais avaliados e membros mais ativos;
+- **Retrospectiva do Ano (por ano de lançamento dos jogos)**:
+  - seletor por ano de lançamento com totais de críticas, lançamentos avaliados, horas jogadas, comentários e média geral (independentemente de quando foram jogados);
+  - destaques daquele ano de lançamento: **Melhor Jogo Lançado**, **Maior Polêmica**, **Maior Consenso**, top gêneros mais avaliados e membros mais ativos;
   - geração de imagem resumo pronta para compartilhar.
 
 ### 7. Membros, Perfis e Afinidade de Gosto
@@ -122,6 +122,7 @@ Principais pilares da plataforma:
 - **Autenticação**: login com **Google** e suporte a conta administrativa dedicada.
 - **Modo “Ver como usuário”**: botão no cabeçalho (ao lado das notificações) que permite ao administrador alternar instantaneamente para a visão de membro comum para testar telas e fluxos sem privilégios visuais de admin.
 - **Painel Admin**:
+  - **Bloquear novos cadastros & Modo somente leitura**: interruptor que desabilita o botão de login com Google na tela inicial e bloqueia novos perfis no Firestore, liberando o botão **Visualizar site (somente leitura)** para visitantes navegarem pelo catálogo, críticas, ranking, retrospectiva e eventos sem criar conta (mantendo as abas de Membros, Meu Perfil e Painel Admin ocultas para visitantes, e o Acesso Admin Mestre ativo);
   - gestão de membros, concessão/revogação de privilégios de administrador (inclusive por UID), banimento com motivo e desbanimento;
   - moderação de jogos, críticas, comentários e limpeza de conteúdo;
   - fila de **reportes de capa incorreta** com acesso rápido à edição da ficha e resolução.
@@ -198,7 +199,7 @@ Principais pilares da plataforma:
 | `events` | Eventos do grupo (`poll` ou `award`), categorias, indicados, prazo e vencedores |
 | `eventVotes` | Votos/palpites por categoria em cada evento |
 | `eventNominations` | Indicações enviadas pelos membros (1 jogo por membro por evento) |
-| `featuredRound` | Configuração do *Jogo da Rodada* fixado no topo |
+| `groupConfig` | Configurações do grupo (`featuredRound` para o *Jogo da Rodada* e `accessControl` para o bloqueio de novos cadastros) |
 | `coverReports` | Reportes de capa incorreta para moderação administrativa |
 | `admins` | Lista de UIDs com privilégios de administrador |
 | `bans` | Registros de suspensão de contas |

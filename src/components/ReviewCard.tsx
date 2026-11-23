@@ -597,41 +597,61 @@ export function ReviewCard({
       {/* Actions footer */}
       <div className="pt-3 border-t border-[#222622] flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-5">
-          <button
-            type="button"
-            onClick={handleToggleAgree}
-            disabled={togglingReaction}
-            className={`inline-flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
-              hasAgreed
-                ? 'text-[#4ADE80]'
-                : 'text-[#90968C] hover:text-[#F2F2EE]'
-            }`}
-          >
-            <ThumbsUp
-              className="w-4 h-4"
-              fill={hasAgreed ? 'currentColor' : 'none'}
-              strokeWidth={1.75}
-            />
-            <span className="tabular-nums">
-              {hasAgreed ? 'Concordou' : 'Concordar'}
-              {reactions.length > 0 ? ` (${reactions.length})` : ''}
+          {user ? (
+            <button
+              type="button"
+              onClick={handleToggleAgree}
+              disabled={togglingReaction}
+              className={`inline-flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                hasAgreed
+                  ? 'text-[#4ADE80]'
+                  : 'text-[#90968C] hover:text-[#F2F2EE]'
+              }`}
+            >
+              <ThumbsUp
+                className="w-4 h-4"
+                fill={hasAgreed ? 'currentColor' : 'none'}
+                strokeWidth={1.75}
+              />
+              <span className="tabular-nums">
+                {hasAgreed ? 'Concordou' : 'Concordar'}
+                {reactions.length > 0 ? ` (${reactions.length})` : ''}
+              </span>
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#787D75]">
+              <ThumbsUp className="w-4 h-4" fill="none" strokeWidth={1.75} />
+              <span className="tabular-nums">
+                {reactions.length === 0
+                  ? '0 concordâncias'
+                  : reactions.length === 1
+                    ? '1 concordância'
+                    : `${reactions.length} concordâncias`}
+              </span>
             </span>
-          </button>
+          )}
 
-          <button
-            type="button"
-            onClick={() => setCommentsOpen((prev) => !prev)}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#90968C] hover:text-[#F2F2EE] transition-colors cursor-pointer"
-          >
-            <MessageSquare className="w-4 h-4" strokeWidth={1.75} />
-            <span className="tabular-nums">
-              {comments.length === 0
-                ? 'Comentar'
-                : comments.length === 1
-                  ? '1 comentário'
-                  : `${comments.length} comentários`}
+          {user || comments.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setCommentsOpen((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#90968C] hover:text-[#F2F2EE] transition-colors cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4" strokeWidth={1.75} />
+              <span className="tabular-nums">
+                {comments.length === 0
+                  ? 'Comentar'
+                  : comments.length === 1
+                    ? '1 comentário'
+                    : `${comments.length} comentários`}
+              </span>
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#787D75]">
+              <MessageSquare className="w-4 h-4" strokeWidth={1.75} />
+              <span className="tabular-nums">0 comentários</span>
             </span>
-          </button>
+          )}
 
           <button
             type="button"
@@ -996,119 +1016,121 @@ export function ReviewCard({
             </ul>
           )}
 
-          <form onSubmit={handleCommentSubmit} className="relative space-y-1.5">
-            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
-              <input
-                ref={commentInputRef}
-                type="text"
-                maxLength={LIMITS.COMMENT_BODY_MAX}
-                value={commentText}
-                onChange={(e) => handleCommentInputChange(e, 'comment')}
-                onKeyDown={(e) => {
-                  if (commentMention && commentMentionMatches.length > 0) {
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      setCommentMention((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              highlightIdx:
-                                (prev.highlightIdx + 1) %
-                                commentMentionMatches.length,
-                            }
-                          : null,
-                      );
-                      return;
-                    }
-                    if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      setCommentMention((prev) =>
-                        prev
-                          ? {
-                              ...prev,
-                              highlightIdx:
-                                (prev.highlightIdx -
-                                  1 +
-                                  commentMentionMatches.length) %
-                                commentMentionMatches.length,
-                            }
-                          : null,
-                      );
-                      return;
-                    }
-                    if (e.key === 'Enter' || e.key === 'Tab') {
-                      e.preventDefault();
-                      const chosen =
-                        commentMentionMatches[commentMention.highlightIdx] ||
-                        commentMentionMatches[0];
-                      if (chosen) handleInsertMention('comment', chosen);
-                      return;
-                    }
-                    if (e.key === 'Escape') {
-                      setCommentMention(null);
-                    }
-                  }
-                }}
-                placeholder="Escreva um comentário... (digite @ para mencionar um Cobra)"
-                aria-label="Adicionar comentário"
-                className="flex-1 min-w-[200px] px-3.5 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#4ADE80]"
-              />
-              <button
-                type="button"
-                onClick={() => setCommentSpoiler((prev) => !prev)}
-                aria-pressed={commentSpoiler}
-                title="Marcar comentário como spoiler"
-                className={`inline-flex items-center gap-1 px-2.5 py-2 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  commentSpoiler
-                    ? 'bg-[#261E0F] border-[#66511D] text-[#FBBF24]'
-                    : 'bg-[#0C0D0C] border-[#2A2F2A] text-[#8C9288] hover:text-[#F2F2EE]'
-                }`}
-              >
-                <EyeOff className="w-3.5 h-3.5" />
-                <span>Spoiler</span>
-              </button>
-              <button
-                type="submit"
-                disabled={!commentText.trim() || submittingComment}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white disabled:opacity-40 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>Enviar</span>
-              </button>
-            </div>
-
-            {commentMention && commentMentionMatches.length > 0 && (
-              <ul className="absolute left-0 right-0 bottom-full mb-1.5 z-30 bg-[#181B18] border border-[#2F352F] rounded-md shadow-2xl overflow-hidden divide-y divide-[#222622]">
-                <li className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-[#787D75] flex items-center gap-1.5 bg-[#121512]">
-                  <AtSign className="w-3 h-3 text-[#4ADE80]" />
-                  <span>Mencionar membro dos Cobras</span>
-                </li>
-                {commentMentionMatches.map((m, idx) => (
-                  <li key={m.uid}>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => {
+          {user && (
+            <form onSubmit={handleCommentSubmit} className="relative space-y-1.5">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                <input
+                  ref={commentInputRef}
+                  type="text"
+                  maxLength={LIMITS.COMMENT_BODY_MAX}
+                  value={commentText}
+                  onChange={(e) => handleCommentInputChange(e, 'comment')}
+                  onKeyDown={(e) => {
+                    if (commentMention && commentMentionMatches.length > 0) {
+                      if (e.key === 'ArrowDown') {
                         e.preventDefault();
-                        handleInsertMention('comment', m);
-                      }}
-                      className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2.5 cursor-pointer ${
-                        idx === commentMention.highlightIdx
-                          ? 'bg-[#222A22] text-[#4ADE80]'
-                          : 'text-[#F2F2EE] hover:bg-[#1F241F]'
-                      }`}
-                    >
-                      <MemberAvatar
-                        name={m.displayName}
-                        primarySrc={m.photoURL}
-                        size="xs"
-                      />
-                      <span className="font-medium truncate">{m.displayName}</span>
-                    </button>
+                        setCommentMention((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                highlightIdx:
+                                  (prev.highlightIdx + 1) %
+                                  commentMentionMatches.length,
+                              }
+                            : null,
+                        );
+                        return;
+                      }
+                      if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        setCommentMention((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                highlightIdx:
+                                  (prev.highlightIdx -
+                                    1 +
+                                    commentMentionMatches.length) %
+                                  commentMentionMatches.length,
+                              }
+                            : null,
+                        );
+                        return;
+                      }
+                      if (e.key === 'Enter' || e.key === 'Tab') {
+                        e.preventDefault();
+                        const chosen =
+                          commentMentionMatches[commentMention.highlightIdx] ||
+                          commentMentionMatches[0];
+                        if (chosen) handleInsertMention('comment', chosen);
+                        return;
+                      }
+                      if (e.key === 'Escape') {
+                        setCommentMention(null);
+                      }
+                    }
+                  }}
+                  placeholder="Escreva um comentário... (digite @ para mencionar um Cobra)"
+                  aria-label="Adicionar comentário"
+                  className="flex-1 min-w-[200px] px-3.5 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#4ADE80]"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCommentSpoiler((prev) => !prev)}
+                  aria-pressed={commentSpoiler}
+                  title="Marcar comentário como spoiler"
+                  className={`inline-flex items-center gap-1 px-2.5 py-2 text-xs font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    commentSpoiler
+                      ? 'bg-[#261E0F] border-[#66511D] text-[#FBBF24]'
+                      : 'bg-[#0C0D0C] border-[#2A2F2A] text-[#8C9288] hover:text-[#F2F2EE]'
+                  }`}
+                >
+                  <EyeOff className="w-3.5 h-3.5" />
+                  <span>Spoiler</span>
+                </button>
+                <button
+                  type="submit"
+                  disabled={!commentText.trim() || submittingComment}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white disabled:opacity-40 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Enviar</span>
+                </button>
+              </div>
+
+              {commentMention && commentMentionMatches.length > 0 && (
+                <ul className="absolute left-0 right-0 bottom-full mb-1.5 z-30 bg-[#181B18] border border-[#2F352F] rounded-md shadow-2xl overflow-hidden divide-y divide-[#222622]">
+                  <li className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-[#787D75] flex items-center gap-1.5 bg-[#121512]">
+                    <AtSign className="w-3 h-3 text-[#4ADE80]" />
+                    <span>Mencionar membro dos Cobras</span>
                   </li>
-                ))}
-              </ul>
-            )}
-          </form>
+                  {commentMentionMatches.map((m, idx) => (
+                    <li key={m.uid}>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleInsertMention('comment', m);
+                        }}
+                        className={`w-full px-3 py-2 text-left text-xs flex items-center gap-2.5 cursor-pointer ${
+                          idx === commentMention.highlightIdx
+                            ? 'bg-[#222A22] text-[#4ADE80]'
+                            : 'text-[#F2F2EE] hover:bg-[#1F241F]'
+                        }`}
+                      >
+                        <MemberAvatar
+                          name={m.displayName}
+                          primarySrc={m.photoURL}
+                          size="xs"
+                        />
+                        <span className="font-medium truncate">{m.displayName}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </form>
+          )}
         </div>
       )}
 

@@ -404,6 +404,15 @@ export interface FeaturedRoundGame {
   updatedAt?: Timestamp | null;
 }
 
+export interface AccessControlConfig {
+  id: string;
+  registrationLocked: boolean;
+  updatedBy: string;
+  updatedByName: string;
+  visibility: 'group';
+  updatedAt?: Timestamp | null;
+}
+
 export type CoverReportStatus = 'open' | 'resolved';
 
 export interface CoverReport {

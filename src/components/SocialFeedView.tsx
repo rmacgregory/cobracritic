@@ -7,7 +7,7 @@ import { ReviewCard } from './ReviewCard';
 
 interface SocialFeedViewProps {
   onSelectGame: (gameId: string) => void;
-  onSelectAuthor: (authorUid: string) => void;
+  onSelectAuthor?: (authorUid: string) => void;
   onEditReview: (game: GameWithStats, review: Review) => void;
   onGoToCatalog: () => void;
 }
@@ -20,7 +20,7 @@ export function SocialFeedView({
   onEditReview,
   onGoToCatalog,
 }: SocialFeedViewProps) {
-  const { gamesWithStats, reviews, comments, members } = useVeredito();
+  const { user, gamesWithStats, reviews, comments, members } = useVeredito();
 
   const [selectedAuthor, setSelectedAuthor] = useState('all');
   const [sentiment, setSentiment] = useState<SentimentFilter>('all');
@@ -104,19 +104,21 @@ export function SocialFeedView({
               />
             </div>
 
-            <select
-              value={selectedAuthor}
-              onChange={(e) => setSelectedAuthor(e.target.value)}
-              aria-label="Filtrar por membro"
-              className="px-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
-            >
-              <option value="all">Todos os membros</option>
-              {members.map((m) => (
-                <option key={m.uid} value={m.uid}>
-                  {m.displayName}
-                </option>
-              ))}
-            </select>
+            {user && (
+              <select
+                value={selectedAuthor}
+                onChange={(e) => setSelectedAuthor(e.target.value)}
+                aria-label="Filtrar por membro"
+                className="px-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
+              >
+                <option value="all">Todos os membros</option>
+                {members.map((m) => (
+                  <option key={m.uid} value={m.uid}>
+                    {m.displayName}
+                  </option>
+                ))}
+              </select>
+            )}
 
             <select
               value={sentiment}
@@ -239,13 +241,19 @@ export function SocialFeedView({
                   return (
                     <li key={cmt.id} className="py-3 first:pt-0 last:pb-0 space-y-1">
                       <p className="text-xs text-[#8C9288]">
-                        <button
-                          type="button"
-                          onClick={() => onSelectAuthor(cmt.authorId)}
-                          className="font-semibold text-[#F2F2EE] hover:text-[#4ADE80] cursor-pointer"
-                        >
-                          {cmt.authorName}
-                        </button>
+                        {onSelectAuthor ? (
+                          <button
+                            type="button"
+                            onClick={() => onSelectAuthor(cmt.authorId)}
+                            className="font-semibold text-[#F2F2EE] hover:text-[#4ADE80] cursor-pointer"
+                          >
+                            {cmt.authorName}
+                          </button>
+                        ) : (
+                          <span className="font-semibold text-[#F2F2EE]">
+                            {cmt.authorName}
+                          </span>
+                        )}
                         {' em '}
                         <button
                           type="button"

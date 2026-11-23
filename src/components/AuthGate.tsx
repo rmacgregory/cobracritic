@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Shield } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, Lock, Shield } from 'lucide-react';
 import { COBRA_LOGO_PATH, resolveAssetUrl } from '../types';
 
 interface AuthGateProps {
   onSignIn: () => void;
   onAdminSignIn: (usernameOrEmail: string, password: string) => Promise<void>;
+  onEnterReadOnly: () => void;
+  registrationLocked: boolean;
   signingIn: boolean;
   authError: string | null;
   adminAuthError: string | null;
@@ -13,6 +15,8 @@ interface AuthGateProps {
 export function AuthGate({
   onSignIn,
   onAdminSignIn,
+  onEnterReadOnly,
+  registrationLocked,
   signingIn,
   authError,
   adminAuthError,
@@ -39,12 +43,47 @@ export function AuthGate({
         <div className="w-full max-w-[340px] flex flex-col items-center space-y-4">
           <button
             type="button"
-            onClick={onSignIn}
-            disabled={signingIn}
-            className="w-full px-6 py-3.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white disabled:opacity-50 transition-colors cursor-pointer"
+            onClick={registrationLocked ? undefined : onSignIn}
+            disabled={signingIn || registrationLocked}
+            aria-disabled={signingIn || registrationLocked}
+            title={
+              registrationLocked
+                ? 'Novos cadastros estão bloqueados pela administração'
+                : 'Entrar com sua conta Google'
+            }
+            className={`w-full px-6 py-3.5 text-sm font-semibold rounded-md transition-colors inline-flex items-center justify-center gap-2 ${
+              registrationLocked
+                ? 'bg-[#1A1D1A] border border-[#2C312C] text-[#6E746B] opacity-70 cursor-not-allowed pointer-events-none select-none'
+                : 'bg-[#F2F2EE] text-[#0C0D0C] hover:bg-white disabled:opacity-50 cursor-pointer'
+            }`}
           >
-            {signingIn ? 'Conectando...' : 'Entrar com Google'}
+            {registrationLocked && <Lock className="w-4 h-4 shrink-0" />}
+            <span>
+              {registrationLocked
+                ? 'Entrar com Google (bloqueado)'
+                : signingIn
+                  ? 'Conectando...'
+                  : 'Entrar com Google'}
+            </span>
           </button>
+
+          {registrationLocked && (
+            <div className="w-full space-y-3">
+              <p className="text-xs text-[#90968C] text-center leading-relaxed">
+                Novos cadastros estão temporariamente bloqueados pela administração.
+                Você ainda pode explorar o catálogo, críticas e rankings em modo somente leitura.
+              </p>
+
+              <button
+                type="button"
+                onClick={onEnterReadOnly}
+                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold bg-[#13261A] border border-[#2C6B41] text-[#86EFAC] rounded-md hover:bg-[#193322] hover:text-white transition-colors cursor-pointer"
+              >
+                <Eye className="w-4 h-4 shrink-0" />
+                <span>Visualizar site (somente leitura)</span>
+              </button>
+            </div>
+          )}
 
           {authError && (
             <p className="text-sm text-[#F87171] text-center" role="alert">

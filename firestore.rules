@@ -50,6 +50,11 @@ service cloud.firestore {
       return (isVerified() || isAdmin()) && isNotBanned();
     }
 
+    function isRegistrationOpen() {
+      return !exists(/databases/$(database)/documents/groupConfig/accessControl) ||
+        get(/databases/$(database)/documents/groupConfig/accessControl).data.registrationLocked != true;
+    }
+
     function isSafeOptionalUrl(url) {
       return url is string && url.size() <= 500 && (
         url == '' ||
@@ -404,6 +409,21 @@ service cloud.firestore {
         data.updatedAt is timestamp;
     }
 
+    function isValidAccessControlConfig(data) {
+      return data.keys().hasAll([
+          'registrationLocked', 'updatedBy', 'updatedByName', 'visibility', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'registrationLocked', 'updatedBy', 'updatedByName', 'visibility', 'updatedAt'
+        ]) &&
+        data.registrationLocked is bool &&
+        isValidId(data.updatedBy) &&
+        data.updatedBy == request.auth.uid &&
+        data.updatedByName is string && data.updatedByName.size() >= 1 && data.updatedByName.size() <= 80 &&
+        data.visibility is string && data.visibility == 'group' &&
+        data.updatedAt is timestamp;
+    }
+
     function isValidCoverReport(data) {
       return data.keys().hasAll([
           'gameId', 'gameTitle', 'gameCoverUrl', 'reporterId', 'reporterName',
@@ -430,15 +450,16 @@ service cloud.firestore {
     // Collection: /users/{userId} (Public Non-PII Member Profiles)
     // ---------------------------------------------------------
     match /users/{userId} {
-      allow get: if isSignedIn() && isValidId(userId) && (resource == null || existing().visibility == 'group');
-      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow get: if isValidId(userId) && (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
         isValidId(userId) &&
         userId == request.auth.uid &&
         isValidUserProfile(incoming(), userId) &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time &&
-        canMemberWrite();
+        canMemberWrite() &&
+        (isAdmin() || isRegistrationOpen());
       allow update: if isSignedIn() &&
         isValidId(userId) &&
         userId == request.auth.uid &&
@@ -496,8 +517,8 @@ service cloud.firestore {
     // Collection: /games/{gameId} (Manually Registered Games)
     // ---------------------------------------------------------
     match /games/{gameId} {
-      allow get: if isSignedIn() && isValidId(gameId) && (resource == null || existing().visibility == 'group');
-      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow get: if isValidId(gameId) && (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
         isValidId(gameId) &&
         isValidGame(incoming()) &&
@@ -535,8 +556,8 @@ service cloud.firestore {
     // Deterministic ID: {gameId}_{authorId}
     // ---------------------------------------------------------
     match /reviews/{reviewId} {
-      allow get: if isSignedIn() && isValidId(reviewId) && (resource == null || existing().visibility == 'group');
-      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow get: if isValidId(reviewId) && (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
         isValidId(reviewId) &&
         isValidReview(incoming()) &&
@@ -576,8 +597,8 @@ service cloud.firestore {
     // Collection: /comments/{commentId} (Social Feed Comments)
     // ---------------------------------------------------------
     match /comments/{commentId} {
-      allow get: if isSignedIn() && isValidId(commentId) && (resource == null || existing().visibility == 'group');
-      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow get: if isValidId(commentId) && (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
         isValidId(commentId) &&
         isValidComment(incoming()) &&
@@ -601,8 +622,8 @@ service cloud.firestore {
     // Deterministic ID: {reviewId}_{userId}
     // ---------------------------------------------------------
     match /reactions/{reactionId} {
-      allow get: if isSignedIn() && isValidId(reactionId) && (resource == null || existing().visibility == 'group');
-      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow get: if isValidId(reactionId) && (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
         isValidId(reactionId) &&
         isValidReaction(incoming()) &&
@@ -621,8 +642,8 @@ service cloud.firestore {
     // Collection: /events/{eventId} (Awards & Voting Events)
     // ---------------------------------------------------------
     match /events/{eventId} {
-      allow get: if isSignedIn() && isValidId(eventId) && (resource == null || existing().visibility == 'group');
-      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow get: if isValidId(eventId) && (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
         isValidId(eventId) &&
         isValidEvent(incoming()) &&
@@ -650,8 +671,8 @@ service cloud.firestore {
     // Deterministic ID: {eventId}_{categoryId}_{userId}
     // ---------------------------------------------------------
     match /eventVotes/{voteId} {
-      allow get: if isSignedIn() && isValidId(voteId) && (resource == null || existing().visibility == 'group');
-      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow get: if isValidId(voteId) && (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
         isValidId(voteId) &&
         isValidEventVote(incoming()) &&
@@ -733,8 +754,8 @@ service cloud.firestore {
     // Deterministic ID: {eventId}_{userId}
     // ---------------------------------------------------------
     match /eventNominations/{nominationId} {
-      allow get: if isSignedIn() && isValidId(nominationId) && (resource == null || existing().visibility == 'group');
-      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow get: if isValidId(nominationId) && (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
         isValidId(nominationId) &&
         isValidEventNomination(incoming()) &&
@@ -774,8 +795,8 @@ service cloud.firestore {
     // Deterministic ID: {gameId}_{userId}
     // ---------------------------------------------------------
     match /userGameStatuses/{statusId} {
-      allow get: if isSignedIn() && isValidId(statusId) && (resource == null || existing().visibility == 'group');
-      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow get: if isValidId(statusId) && (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
         isValidId(statusId) &&
         isValidUserGameStatus(incoming()) &&
@@ -803,25 +824,39 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------
-    // Collection: /groupConfig/{configId} (Admin-Pinned Featured Round)
+    // Collection: /groupConfig/{configId} (Admin-Managed Group Settings)
     // ---------------------------------------------------------
     match /groupConfig/{configId} {
-      allow get: if isSignedIn() && configId == 'featuredRound' && (resource == null || existing().visibility == 'group');
-      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow get: if configId in ['featuredRound', 'accessControl'] &&
+        (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
-        configId == 'featuredRound' &&
-        isValidFeaturedRoundConfig(incoming()) &&
         incoming().updatedAt == request.time &&
-        isAdmin();
+        isAdmin() &&
+        (
+          (configId == 'featuredRound' && isValidFeaturedRoundConfig(incoming())) ||
+          (configId == 'accessControl' && isValidAccessControlConfig(incoming()))
+        );
       allow update: if isSignedIn() &&
-        configId == 'featuredRound' &&
-        isValidFeaturedRoundConfig(incoming()) &&
         incoming().updatedAt == request.time &&
-        incoming().diff(existing()).affectedKeys().hasOnly([
-          'gameId', 'title', 'coverUrl', 'roundLabel', 'eventId', 'note',
-          'pinnedBy', 'pinnedByName', 'updatedAt'
-        ]) &&
-        isAdmin();
+        isAdmin() &&
+        (
+          (
+            configId == 'featuredRound' &&
+            isValidFeaturedRoundConfig(incoming()) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'gameId', 'title', 'coverUrl', 'roundLabel', 'eventId', 'note',
+              'pinnedBy', 'pinnedByName', 'updatedAt'
+            ])
+          ) ||
+          (
+            configId == 'accessControl' &&
+            isValidAccessControlConfig(incoming()) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'registrationLocked', 'updatedBy', 'updatedByName', 'updatedAt'
+            ])
+          )
+        );
       allow delete: if isSignedIn() &&
         configId == 'featuredRound' &&
         isAdmin();

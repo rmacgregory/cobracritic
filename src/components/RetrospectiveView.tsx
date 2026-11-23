@@ -36,18 +36,11 @@ interface YearGameSummary {
   stdDev: number;
 }
 
-function getReviewYear(review: Review): number {
-  if (review.createdAt && typeof review.createdAt.toDate === 'function') {
-    return review.createdAt.toDate().getFullYear();
-  }
-  return new Date().getFullYear();
-}
-
 export function RetrospectiveView({
   onSelectGame,
   onSelectMember,
 }: RetrospectiveViewProps) {
-  const { gamesWithStats, reviews, comments, membersById } = useVeredito();
+  const { user, gamesWithStats, reviews, comments, membersById } = useVeredito();
 
   const gamesById = useMemo(() => {
     const map = new Map<string, GameWithStats>();
@@ -58,25 +51,27 @@ export function RetrospectiveView({
   const availableYears = useMemo(() => {
     const years = new Set<number>();
     years.add(new Date().getFullYear());
-    for (const r of reviews) {
-      years.add(getReviewYear(r));
+    for (const g of gamesWithStats) {
+      if (Number.isFinite(g.releaseYear) && g.releaseYear >= 1970) {
+        years.add(g.releaseYear);
+      }
     }
     return Array.from(years).sort((a, b) => b - a);
-  }, [reviews]);
+  }, [gamesWithStats]);
 
   const [selectedYear, setSelectedYear] = useState<number>(
-    () => availableYears[0] || new Date().getFullYear(),
+    () => new Date().getFullYear(),
   );
   const [showShareModal, setShowShareModal] = useState(false);
 
   const yearStats = useMemo(() => {
-    const yearReviews = reviews.filter((r) => getReviewYear(r) === selectedYear);
-    const yearComments = comments.filter((c) => {
-      if (c.createdAt && typeof c.createdAt.toDate === 'function') {
-        return c.createdAt.toDate().getFullYear() === selectedYear;
-      }
-      return false;
-    });
+    const releasedGamesInYear = gamesWithStats.filter(
+      (g) => g.releaseYear === selectedYear,
+    );
+    const releasedGameIds = new Set(releasedGamesInYear.map((g) => g.id));
+
+    const yearReviews = reviews.filter((r) => releasedGameIds.has(r.gameId));
+    const yearComments = comments.filter((c) => releasedGameIds.has(c.gameId));
 
     const totalReviews = yearReviews.length;
     const totalHours = yearReviews.reduce((acc, r) => acc + (r.hoursPlayed || 0), 0);
@@ -89,7 +84,7 @@ export function RetrospectiveView({
         ? yearReviews.reduce((acc, r) => acc + r.score, 0) / totalReviews
         : 75;
 
-    // Group reviews by game
+    // Group reviews by game (strictly games released in selectedYear)
     const byGame = new Map<string, Review[]>();
     for (const r of yearReviews) {
       const list = byGame.get(r.gameId) || [];
@@ -109,7 +104,7 @@ export function RetrospectiveView({
         title: game?.title || revs[0].gameTitle,
         developer: game?.developer || '',
         coverUrl: game?.coverUrl || revs[0].gameCoverUrl,
-        releaseYear: game?.releaseYear,
+        releaseYear: game?.releaseYear ?? selectedYear,
         reviewCount: revs.length,
         avgScore: Math.round(rawAvg),
         weightedScore: computeWeightedScore(rawAvg, revs.length, globalMean),
@@ -134,7 +129,7 @@ export function RetrospectiveView({
         return b.reviewCount - a.reviewCount;
       })[0] || null;
 
-    // Member highlights
+    // Member highlights on games released in selectedYear
     const byMember = new Map<
       string,
       { uid: string; name: string; photoURL: string; fallbackPhoto: string; count: number; totalScore: number; totalHours: number }
@@ -171,7 +166,7 @@ export function RetrospectiveView({
     const strictest = [...poolForAvg].sort((a, b) => a.avg - b.avg)[0] || null;
     const mostGenerous = [...poolForAvg].sort((a, b) => b.avg - a.avg)[0] || null;
 
-    // Top genres of the year
+    // Top genres among games released in selectedYear
     const genreCounts = new Map<string, { count: number; scoreSum: number }>();
     for (const r of yearReviews) {
       const game = gamesById.get(r.gameId);
@@ -195,6 +190,7 @@ export function RetrospectiveView({
     return {
       totalReviews,
       totalGames: byGame.size,
+      catalogGamesInYear: releasedGamesInYear.length,
       totalComments: yearComments.length,
       totalHours,
       avgScore,
@@ -207,7 +203,7 @@ export function RetrospectiveView({
       mostGenerous,
       topGenres,
     };
-  }, [reviews, comments, selectedYear, gamesById, membersById]);
+  }, [gamesWithStats, reviews, comments, selectedYear, gamesById, membersById]);
 
   const goty = yearStats.topGames[0] || null;
 
@@ -218,14 +214,17 @@ export function RetrospectiveView({
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-[#4ADE80] flex items-center gap-1.5">
             <BarChart3 className="w-3.5 h-3.5" />
-            <span>Resumo Anual dos Cobras</span>
+            <span>Retrospectiva por Ano de Lançamento · Jogos de {selectedYear}</span>
           </p>
           <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#F2F2EE]">
             Retrospectiva {selectedYear}
           </h1>
-          <p className="text-sm text-[#90968C] max-w-2xl">
-            Os jogos que marcaram o grupo, as maiores polêmicas, consensos e os destaques
-            de cada Cobra ao longo do ano.
+          <p className="text-sm text-[#90968C] max-w-2xl leading-relaxed">
+            Esta retrospectiva reúne exclusivamente os{' '}
+            <strong className="text-[#D8DDD5] font-medium">
+              jogos lançados em {selectedYear}
+            </strong>{' '}
+            — independentemente do ano em que foram jogados ou avaliados pelo grupo.
           </p>
         </div>
 
@@ -233,12 +232,12 @@ export function RetrospectiveView({
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
-            aria-label="Escolher ano da retrospectiva"
+            aria-label="Escolher ano de lançamento dos jogos"
             className="px-3.5 py-2 text-sm font-mono bg-[#141614] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80] cursor-pointer"
           >
             {availableYears.map((yr) => (
               <option key={yr} value={yr}>
-                Ano {yr}
+                Lançamentos {yr}
               </option>
             ))}
           </select>
@@ -260,34 +259,46 @@ export function RetrospectiveView({
         <section className="bg-[#141614] border border-[#262A26] rounded-md p-12 text-center space-y-3">
           <Trophy className="w-8 h-8 text-[#4B5148] mx-auto" strokeWidth={1.5} />
           <h2 className="font-display text-2xl font-semibold text-[#F2F2EE]">
-            Nenhuma avaliação registrada em {selectedYear}
+            Nenhum jogo lançado em {selectedYear} foi avaliado ainda
           </h2>
-          <p className="text-sm text-[#90968C] max-w-md mx-auto">
-            Assim que os membros publicarem notas e críticas em {selectedYear}, o resumo
-            anual do grupo será montado automaticamente aqui.
+          <p className="text-sm text-[#90968C] max-w-lg mx-auto leading-relaxed">
+            Esta retrospectiva considera apenas os jogos com lançamento em {selectedYear} (não
+            o ano em que foram jogados).
+            {yearStats.catalogGamesInYear > 0
+              ? ` Há ${yearStats.catalogGamesInYear} ${
+                  yearStats.catalogGamesInYear === 1
+                    ? 'jogo lançado'
+                    : 'jogos lançados'
+                } em ${selectedYear} no catálogo aguardando avaliações.`
+              : ` Assim que títulos lançados em ${selectedYear} forem cadastrados e avaliados, o resumo aparecerá aqui.`}
           </p>
         </section>
       ) : (
         <>
           {/* KPI Strip */}
           <section
-            aria-label="Números do ano"
+            aria-label={`Números dos jogos lançados em ${selectedYear}`}
             className="grid grid-cols-2 sm:grid-cols-5 gap-3 sm:gap-4"
           >
             <div className="bg-[#141614] border border-[#262A26] rounded-md p-4">
-              <p className="text-xs text-[#8C9288]">Críticas no ano</p>
+              <p className="text-xs text-[#8C9288]">Críticas (jogos de {selectedYear})</p>
               <p className="font-mono text-2xl sm:text-3xl font-semibold text-[#F2F2EE] tabular-nums mt-1">
                 {yearStats.totalReviews}
               </p>
             </div>
             <div className="bg-[#141614] border border-[#262A26] rounded-md p-4">
-              <p className="text-xs text-[#8C9288]">Jogos avaliados</p>
+              <p className="text-xs text-[#8C9288]">Lançamentos avaliados</p>
               <p className="font-mono text-2xl sm:text-3xl font-semibold text-[#F2F2EE] tabular-nums mt-1">
                 {yearStats.totalGames}
+                {yearStats.catalogGamesInYear > yearStats.totalGames && (
+                  <span className="text-xs font-normal text-[#787D75] ml-1">
+                    /{yearStats.catalogGamesInYear}
+                  </span>
+                )}
               </p>
             </div>
             <div className="bg-[#141614] border border-[#262A26] rounded-md p-4">
-              <p className="text-xs text-[#8C9288]">Média do grupo</p>
+              <p className="text-xs text-[#8C9288]">Média de {selectedYear}</p>
               <p className="font-mono text-2xl sm:text-3xl font-semibold text-[#4ADE80] tabular-nums mt-1">
                 {yearStats.avgScore ?? '—'}
               </p>
@@ -325,7 +336,7 @@ export function RetrospectiveView({
                 <div className="min-w-0 flex-1 space-y-2">
                   <p className="text-xs font-mono uppercase tracking-[0.14em] text-[#4ADE80] flex items-center gap-1.5">
                     <Trophy className="w-3.5 h-3.5" />
-                    <span>Jogo do Ano dos Cobras · {selectedYear}</span>
+                    <span>Melhor Jogo Lançado em {selectedYear} · Cobras</span>
                   </p>
                   <button
                     type="button"
@@ -336,9 +347,9 @@ export function RetrospectiveView({
                   </button>
                   <p className="text-xs sm:text-sm text-[#A8ACA5] tabular-nums">
                     {goty.developer ? `${goty.developer} · ` : ''}
-                    {goty.reviewCount}{' '}
-                    {goty.reviewCount === 1 ? 'avaliação' : 'avaliações'} em {selectedYear} ·
-                    Faixa {goty.minScore}–{goty.maxScore}
+                    Lançado em {selectedYear} · {goty.reviewCount}{' '}
+                    {goty.reviewCount === 1 ? 'avaliação' : 'avaliações'} · Faixa{' '}
+                    {goty.minScore}–{goty.maxScore}
                   </p>
                 </div>
                 <div className="shrink-0">
@@ -354,8 +365,8 @@ export function RetrospectiveView({
               {yearStats.topGames.length > 1 && (
                 <div className="pt-5 border-t border-[#223326] space-y-3">
                   <p className="text-xs font-mono uppercase tracking-wider text-[#8C9288]">
-                    Top {Math.min(yearStats.topGames.length, 5)} jogos mais bem avaliados de{' '}
-                    {selectedYear}
+                    Top {Math.min(yearStats.topGames.length, 5)} lançamentos de {selectedYear}{' '}
+                    mais bem avaliados
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                     {yearStats.topGames.slice(1, 5).map((g, idx) => (
@@ -405,7 +416,7 @@ export function RetrospectiveView({
                 >
                   <p className="text-xs font-medium text-[#FBBF24] flex items-center gap-1.5">
                     <Flame className="w-3.5 h-3.5" />
-                    <span>Maior Polêmica de {selectedYear}</span>
+                    <span>Maior Polêmica (Lançamentos {selectedYear})</span>
                   </p>
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3.5 min-w-0">
@@ -442,7 +453,7 @@ export function RetrospectiveView({
                 >
                   <p className="text-xs font-medium text-[#4ADE80] flex items-center gap-1.5">
                     <HeartHandshake className="w-3.5 h-3.5" />
-                    <span>Maior Consenso de {selectedYear}</span>
+                    <span>Maior Consenso (Lançamentos {selectedYear})</span>
                   </p>
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3.5 min-w-0">
@@ -474,21 +485,24 @@ export function RetrospectiveView({
           <section className="space-y-4">
             <h2 className="font-display text-xl sm:text-2xl font-semibold text-[#F2F2EE] flex items-center gap-2">
               <Users className="w-5 h-5 text-[#4ADE80]" />
-              <span>Destaques dos Membros em {selectedYear}</span>
+              <span>Destaques dos Membros nos Jogos de {selectedYear}</span>
             </h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {yearStats.mostActive && (
                 <button
                   type="button"
+                  disabled={!user}
                   onClick={() =>
-                    yearStats.mostActive && onSelectMember(yearStats.mostActive.uid)
+                    user && yearStats.mostActive && onSelectMember(yearStats.mostActive.uid)
                   }
-                  className="bg-[#141614] border border-[#262A26] hover:border-[#4ADE80]/60 rounded-md p-4 text-left space-y-3 transition-colors cursor-pointer"
+                  className={`bg-[#141614] border border-[#262A26] rounded-md p-4 text-left space-y-3 transition-colors ${
+                    user ? 'hover:border-[#4ADE80]/60 cursor-pointer' : 'cursor-default'
+                  }`}
                 >
                   <p className="text-[11px] font-mono uppercase tracking-wider text-[#4ADE80] flex items-center gap-1.5">
                     <MessageSquare className="w-3.5 h-3.5" />
-                    <span>Crítico mais ativo</span>
+                    <span>Mais avaliou jogos de {selectedYear}</span>
                   </p>
                   <div className="flex items-center gap-3">
                     <MemberAvatar
@@ -513,14 +527,17 @@ export function RetrospectiveView({
               {yearStats.marathoner && (
                 <button
                   type="button"
+                  disabled={!user}
                   onClick={() =>
-                    yearStats.marathoner && onSelectMember(yearStats.marathoner.uid)
+                    user && yearStats.marathoner && onSelectMember(yearStats.marathoner.uid)
                   }
-                  className="bg-[#141614] border border-[#262A26] hover:border-[#60A5FA]/60 rounded-md p-4 text-left space-y-3 transition-colors cursor-pointer"
+                  className={`bg-[#141614] border border-[#262A26] rounded-md p-4 text-left space-y-3 transition-colors ${
+                    user ? 'hover:border-[#60A5FA]/60 cursor-pointer' : 'cursor-default'
+                  }`}
                 >
                   <p className="text-[11px] font-mono uppercase tracking-wider text-[#60A5FA] flex items-center gap-1.5">
                     <Clock className="w-3.5 h-3.5" />
-                    <span>Maratonista do ano</span>
+                    <span>Maratonista de {selectedYear}</span>
                   </p>
                   <div className="flex items-center gap-3">
                     <MemberAvatar
@@ -544,10 +561,13 @@ export function RetrospectiveView({
               {yearStats.strictest && (
                 <button
                   type="button"
+                  disabled={!user}
                   onClick={() =>
-                    yearStats.strictest && onSelectMember(yearStats.strictest.uid)
+                    user && yearStats.strictest && onSelectMember(yearStats.strictest.uid)
                   }
-                  className="bg-[#141614] border border-[#262A26] hover:border-[#FBBF24]/60 rounded-md p-4 text-left space-y-3 transition-colors cursor-pointer"
+                  className={`bg-[#141614] border border-[#262A26] rounded-md p-4 text-left space-y-3 transition-colors ${
+                    user ? 'hover:border-[#FBBF24]/60 cursor-pointer' : 'cursor-default'
+                  }`}
                 >
                   <p className="text-[11px] font-mono uppercase tracking-wider text-[#FBBF24] flex items-center gap-1.5">
                     <Award className="w-3.5 h-3.5" />
@@ -575,10 +595,15 @@ export function RetrospectiveView({
               {yearStats.mostGenerous && (
                 <button
                   type="button"
+                  disabled={!user}
                   onClick={() =>
-                    yearStats.mostGenerous && onSelectMember(yearStats.mostGenerous.uid)
+                    user &&
+                    yearStats.mostGenerous &&
+                    onSelectMember(yearStats.mostGenerous.uid)
                   }
-                  className="bg-[#141614] border border-[#262A26] hover:border-[#4ADE80]/60 rounded-md p-4 text-left space-y-3 transition-colors cursor-pointer"
+                  className={`bg-[#141614] border border-[#262A26] rounded-md p-4 text-left space-y-3 transition-colors ${
+                    user ? 'hover:border-[#4ADE80]/60 cursor-pointer' : 'cursor-default'
+                  }`}
                 >
                   <p className="text-[11px] font-mono uppercase tracking-wider text-[#86EFAC] flex items-center gap-1.5">
                     <Trophy className="w-3.5 h-3.5" />
@@ -609,7 +634,7 @@ export function RetrospectiveView({
           {yearStats.topGenres.length > 0 && (
             <section className="bg-[#141614] border border-[#262A26] rounded-md p-6 space-y-4">
               <h2 className="font-display text-xl font-semibold text-[#F2F2EE]">
-                Gêneros mais avaliados em {selectedYear}
+                Gêneros mais avaliados entre lançamentos de {selectedYear}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {yearStats.topGenres.map((item) => (

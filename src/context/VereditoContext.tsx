@@ -44,6 +44,7 @@ import {
   resolveNotificationPreferences,
   sanitizeAvatarUrl,
   sanitizeOptionalUrl,
+  type AccessControlConfig,
   type AdminGrant,
   type CobraEvent,
   type CoverReport,
@@ -205,6 +206,12 @@ interface VereditoContextValue {
   userStatusesByGame: Record<string, UserGameStatus[]>;
   myStatusByGame: Record<string, GamePlayStatus>;
   featuredRound: FeaturedRoundGame | null;
+  accessControl: AccessControlConfig | null;
+  registrationLocked: boolean;
+  readOnlyMode: boolean;
+  enterReadOnlyMode: () => void;
+  exitReadOnlyMode: () => void;
+  setRegistrationLocked: (locked: boolean) => Promise<void>;
   coverReports: CoverReport[];
   openCoverReports: CoverReport[];
   myOpenCoverReportGameIds: Set<string>;
@@ -329,6 +336,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   const [eventNominations, setEventNominations] = useState<EventNomination[]>([]);
   const [userGameStatuses, setUserGameStatuses] = useState<UserGameStatus[]>([]);
   const [featuredRound, setFeaturedRound] = useState<FeaturedRoundGame | null>(null);
+  const [accessControl, setAccessControl] = useState<AccessControlConfig | null>(null);
+  const [readOnlyMode, setReadOnlyMode] = useState(false);
   const [coverReports, setCoverReports] = useState<CoverReport[]>([]);
   const [notifReadState, setNotifReadState] = useState<NotificationReadState>({
     readIds: [],
@@ -352,6 +361,40 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     DEFAULT_NOTIFICATION_PREFERENCES,
   );
 
+  // Real-time listener for public access control setting (active even before sign-in)
+  useEffect(() => {
+    const unsubAccessControl = onSnapshot(
+      doc(db, 'groupConfig', 'accessControl'),
+      (snap) => {
+        if (!snap.exists()) {
+          setAccessControl(null);
+          return;
+        }
+        setAccessControl({
+          id: snap.id,
+          ...(snap.data() as Omit<AccessControlConfig, 'id'>),
+        });
+      },
+      (err) => {
+        console.warn('Could not read accessControl config:', err);
+      },
+    );
+
+    return () => unsubAccessControl();
+  }, []);
+
+  const registrationLocked = Boolean(accessControl?.registrationLocked);
+
+  const enterReadOnlyMode = useCallback(() => {
+    setAuthError(null);
+    setAdminAuthError(null);
+    setReadOnlyMode(true);
+  }, []);
+
+  const exitReadOnlyMode = useCallback(() => {
+    setReadOnlyMode(false);
+  }, []);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
       setUser(nextUser);
@@ -359,6 +402,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       setProfileSetupPending(false);
 
       if (nextUser) {
+        setReadOnlyMode(false);
         const userRef = doc(db, 'users', nextUser.uid);
         try {
           const snap = await getDoc(userRef);
@@ -388,6 +432,13 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
                 setProfileSetupPending(true);
                 return;
               }
+              if (code === 'permission-denied') {
+                await signOut(auth);
+                setAuthError(
+                  'Novos cadastros estão bloqueados pela administração. Use o modo somente leitura para visualizar o site.',
+                );
+                return;
+              }
               throw writeErr;
             }
           } else {
@@ -411,18 +462,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           handleFirestoreError(error, OperationType.WRITE, `users/${nextUser.uid}`);
         }
       } else {
-        setMembers([]);
         setAdmins([]);
         setBans([]);
-        setGames([]);
-        setReviews([]);
-        setComments([]);
-        setReactions([]);
-        setEvents([]);
-        setEventVotes([]);
-        setEventNominations([]);
-        setUserGameStatuses([]);
-        setFeaturedRound(null);
         setCoverReports([]);
         setLiveNotifId(null);
         setLiveCoverReportId(null);
@@ -446,8 +487,20 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!authReady || !user) {
+    if (!authReady || (!user && !readOnlyMode)) {
       setDataLoading(false);
+      if (!user && !readOnlyMode) {
+        setMembers([]);
+        setGames([]);
+        setReviews([]);
+        setComments([]);
+        setReactions([]);
+        setEvents([]);
+        setEventVotes([]);
+        setEventNominations([]);
+        setUserGameStatuses([]);
+        setFeaturedRound(null);
+      }
       return;
     }
 
@@ -476,25 +529,29 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       (err) => handleFirestoreError(err, OperationType.LIST, 'users'),
     );
 
-    const unsubAdmins = onSnapshot(
-      query(collection(db, 'admins'), where('visibility', '==', 'group')),
-      (snap) => {
-        const list = snap.docs.map((d) => d.data() as AdminGrant);
-        list.sort((a, b) => getTimeMillis(a.createdAt) - getTimeMillis(b.createdAt));
-        setAdmins(list);
-      },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'admins'),
-    );
+    const unsubAdmins = user
+      ? onSnapshot(
+          query(collection(db, 'admins'), where('visibility', '==', 'group')),
+          (snap) => {
+            const list = snap.docs.map((d) => d.data() as AdminGrant);
+            list.sort((a, b) => getTimeMillis(a.createdAt) - getTimeMillis(b.createdAt));
+            setAdmins(list);
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'admins'),
+        )
+      : () => {};
 
-    const unsubBans = onSnapshot(
-      query(collection(db, 'bans'), where('visibility', '==', 'group')),
-      (snap) => {
-        const list = snap.docs.map((d) => d.data() as UserBan);
-        list.sort((a, b) => getTimeMillis(b.createdAt) - getTimeMillis(a.createdAt));
-        setBans(list);
-      },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'bans'),
-    );
+    const unsubBans = user
+      ? onSnapshot(
+          query(collection(db, 'bans'), where('visibility', '==', 'group')),
+          (snap) => {
+            const list = snap.docs.map((d) => d.data() as UserBan);
+            list.sort((a, b) => getTimeMillis(b.createdAt) - getTimeMillis(a.createdAt));
+            setBans(list);
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'bans'),
+        )
+      : () => {};
 
     const unsubGames = onSnapshot(
       query(collection(db, 'games'), where('visibility', '==', 'group')),
@@ -539,7 +596,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         if (!commentsInitializedRef.current) {
           seenCommentIdsRef.current = new Set(list.map((c) => c.id));
           commentsInitializedRef.current = true;
-        } else {
+        } else if (user) {
           for (const change of snap.docChanges()) {
             if (change.type === 'added') {
               const docId = change.doc.id;
@@ -605,7 +662,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           for (const ev of list) map.set(ev.id, ev.status);
           seenEventStatusByIdRef.current = map;
           eventsInitializedRef.current = true;
-        } else {
+        } else if (user) {
           const prefs = notificationPreferencesRef.current;
           for (const ev of list) {
             const prevStatus = seenEventStatusByIdRef.current.get(ev.id);
@@ -691,6 +748,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           lastFeaturedRoundKeyRef.current = nextKey;
           const prefs = notificationPreferencesRef.current;
           if (
+            user &&
             prefs.featuredRound &&
             prefs.liveToasts &&
             nextRound.pinnedBy !== user.uid
@@ -717,7 +775,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       unsubUserGameStatuses();
       unsubFeaturedRound();
     };
-  }, [authReady, user]);
+  }, [authReady, user, readOnlyMode]);
 
   const profile = useMemo(() => {
     if (!user) return null;
@@ -1318,6 +1376,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithGoogle = async () => {
+    if (registrationLocked) {
+      setAuthError(
+        'Novos cadastros estão bloqueados no momento. Clique em "Visualizar site (somente leitura)" para navegar.',
+      );
+      return;
+    }
     setAuthError(null);
     setAdminAuthError(null);
     setSigningIn(true);
@@ -2326,6 +2390,36 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const setRegistrationLocked = async (locked: boolean) => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem alterar o bloqueio de cadastros.');
+    }
+    const configRef = doc(db, 'groupConfig', 'accessControl');
+    const path = 'groupConfig/accessControl';
+    const updatedByName = getCurrentDisplayName();
+    try {
+      const snap = await getDoc(configRef);
+      if (snap.exists()) {
+        await updateDoc(configRef, {
+          registrationLocked: locked,
+          updatedBy: user.uid,
+          updatedByName,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(configRef, {
+          registrationLocked: locked,
+          updatedBy: user.uid,
+          updatedByName,
+          visibility: 'group' as const,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  };
+
   return (
     <VereditoContext.Provider
       value={{
@@ -2364,6 +2458,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         userStatusesByGame,
         myStatusByGame,
         featuredRound,
+        accessControl,
+        registrationLocked,
+        readOnlyMode,
+        enterReadOnlyMode,
+        exitReadOnlyMode,
+        setRegistrationLocked,
         coverReports,
         openCoverReports,
         myOpenCoverReportGameIds,

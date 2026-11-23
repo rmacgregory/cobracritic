@@ -5,6 +5,8 @@ import {
   Eraser,
   ExternalLink,
   Flag,
+  Lock,
+  LockOpen,
   Pencil,
   Search,
   Shield,
@@ -53,6 +55,9 @@ export function AdminPanelView({
     reviews,
     comments,
     openCoverReports,
+    accessControl,
+    registrationLocked,
+    setRegistrationLocked,
     grantAdmin,
     revokeAdmin,
     banUser,
@@ -249,6 +254,94 @@ export function AdminPanelView({
           </button>
         </div>
       )}
+
+      {/* Access Control: Lock New Registrations */}
+      <section
+        aria-label="Controle de acesso e novos cadastros"
+        className={`border p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+          registrationLocked
+            ? 'bg-[#211910] border-[#664C1C]'
+            : 'bg-[#141614] border-[#262A26]'
+        }`}
+      >
+        <div className="space-y-1.5 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            {registrationLocked ? (
+              <Lock className="w-4 h-4 text-[#FBBF24] shrink-0" />
+            ) : (
+              <LockOpen className="w-4 h-4 text-[#4ADE80] shrink-0" />
+            )}
+            <h2 className="font-display text-base sm:text-lg font-semibold text-[#F2F2EE]">
+              Bloquear novos cadastros
+            </h2>
+            <span
+              className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
+                registrationLocked
+                  ? 'bg-[#2B2010] border-[#78571D] text-[#FDE68A]'
+                  : 'bg-[#13261A] border-[#2C6B41] text-[#86EFAC]'
+              }`}
+            >
+              {registrationLocked ? 'BLOQUEADO · SOMENTE LEITURA' : 'CADASTROS ABERTOS'}
+            </span>
+          </div>
+          <p className="text-xs text-[#A8ACA5] leading-relaxed max-w-2xl">
+            Quando ativado, o botão <strong>Entrar com Google</strong> na tela de login fica
+            desabilitado (não clicável) e visitantes podem clicar em{' '}
+            <strong>Visualizar site (somente leitura)</strong> para navegar sem criar conta. O{' '}
+            <strong>Acesso Admin Mestre</strong> continua disponível.
+          </p>
+          {accessControl?.updatedByName && (
+            <p className="text-[11px] text-[#787D75]">
+              Última alteração por{' '}
+              <strong className="text-[#C8CBC4] font-medium">
+                {accessControl.updatedByName}
+              </strong>{' '}
+              · {formatTimestamp(accessControl.updatedAt)}
+            </p>
+          )}
+        </div>
+
+        <button
+          type="button"
+          role="switch"
+          aria-checked={registrationLocked}
+          disabled={busyKey === 'toggle-registration-lock'}
+          onClick={() =>
+            runAction(
+              'toggle-registration-lock',
+              () => setRegistrationLocked(!registrationLocked),
+              !registrationLocked
+                ? 'Novos cadastros bloqueados. O botão de login com Google está desabilitado e visitantes podem acessar em modo somente leitura.'
+                : 'Novos cadastros liberados novamente na tela de login.',
+            )
+          }
+          className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-50 ${
+            registrationLocked
+              ? 'bg-[#FBBF24] border-[#FBBF24] text-[#0C0D0C] hover:bg-[#FCD34D]'
+              : 'bg-[#0C0D0C] border-[#384038] text-[#F2F2EE] hover:border-[#FBBF24] hover:text-[#FDE68A]'
+          }`}
+        >
+          {registrationLocked ? (
+            <>
+              <LockOpen className="w-4 h-4 shrink-0" />
+              <span>
+                {busyKey === 'toggle-registration-lock'
+                  ? 'Atualizando...'
+                  : 'Liberar cadastros'}
+              </span>
+            </>
+          ) : (
+            <>
+              <Lock className="w-4 h-4 shrink-0" />
+              <span>
+                {busyKey === 'toggle-registration-lock'
+                  ? 'Atualizando...'
+                  : 'Bloquear cadastros'}
+              </span>
+            </>
+          )}
+        </button>
+      </section>
 
       {/* Summary Metrics */}
       <dl className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">

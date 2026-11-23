@@ -55,6 +55,7 @@ export function CatalogView({
   onGoToFeed,
 }: CatalogViewProps) {
   const {
+    user,
     gamesWithStats,
     reviews,
     dataLoading,
@@ -244,24 +245,26 @@ export function CatalogView({
             O catálogo começa limpo de propósito para que o Grupo dos Cobras cadastre
             manualmente apenas os jogos que realmente importa avaliar e discutir.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onOpenNewGame}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Cadastrar primeiro jogo</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleSeedStarters}
-              disabled={seeding}
-              className="px-5 py-2.5 text-sm font-medium border border-[#2F352F] bg-[#0C0D0C] text-[#F2F2EE] rounded-md hover:border-[#666B63] disabled:opacity-50 transition-colors cursor-pointer"
-            >
-              {seeding ? 'Carregando exemplos...' : 'Carregar 4 jogos de exemplo'}
-            </button>
-          </div>
+          {user && (
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={onOpenNewGame}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Cadastrar primeiro jogo</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleSeedStarters}
+                disabled={seeding}
+                className="px-5 py-2.5 text-sm font-medium border border-[#2F352F] bg-[#0C0D0C] text-[#F2F2EE] rounded-md hover:border-[#666B63] disabled:opacity-50 transition-colors cursor-pointer"
+              >
+                {seeding ? 'Carregando exemplos...' : 'Carregar 4 jogos de exemplo'}
+              </button>
+            </div>
+          )}
         </section>
       </main>
     );
@@ -419,30 +422,32 @@ export function CatalogView({
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <label
-                  htmlFor="filter-my-status"
-                  className="text-xs text-[#8C9288] whitespace-nowrap"
-                >
-                  Meu status:
-                </label>
-                <select
-                  id="filter-my-status"
-                  value={selectedStatus}
-                  onChange={(e) =>
-                    setSelectedStatus(e.target.value as 'all' | GamePlayStatus)
-                  }
-                  aria-label="Filtrar pelo meu status de jogo"
-                  className="px-2.5 py-1.5 text-xs bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
-                >
-                  <option value="all">Todos os status</option>
-                  {GAME_PLAY_STATUS_LIST.map((st) => (
-                    <option key={st} value={st}>
-                      {GAME_PLAY_STATUS_META[st].label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {user && (
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="filter-my-status"
+                    className="text-xs text-[#8C9288] whitespace-nowrap"
+                  >
+                    Meu status:
+                  </label>
+                  <select
+                    id="filter-my-status"
+                    value={selectedStatus}
+                    onChange={(e) =>
+                      setSelectedStatus(e.target.value as 'all' | GamePlayStatus)
+                    }
+                    aria-label="Filtrar pelo meu status de jogo"
+                    className="px-2.5 py-1.5 text-xs bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
+                  >
+                    <option value="all">Todos os status</option>
+                    {GAME_PLAY_STATUS_LIST.map((st) => (
+                      <option key={st} value={st}>
+                        {GAME_PLAY_STATUS_META[st].label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <button
                 type="button"
@@ -518,22 +523,24 @@ export function CatalogView({
               >
                 Limpar filtros
               </button>
-              <button
-                type="button"
-                onClick={onOpenNewGame}
-                className="px-4 py-2 text-xs font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white cursor-pointer"
-              >
-                Cadastrar jogo
-              </button>
+              {user && (
+                <button
+                  type="button"
+                  onClick={onOpenNewGame}
+                  className="px-4 py-2 text-xs font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white cursor-pointer"
+                >
+                  Cadastrar jogo
+                </button>
+              )}
             </div>
           </div>
         ) : viewMode === 'list' ? (
           <div className="border border-[#262A26] bg-[#141614] divide-y divide-[#222622]">
             <div className="hidden sm:grid sm:grid-cols-12 items-center gap-3 px-4 py-2 bg-[#101210] text-[11px] font-mono uppercase tracking-wider text-[#787D75]">
               <span className="col-span-1">Nota</span>
-              <span className="col-span-6">Jogo</span>
+              <span className={user ? 'col-span-6' : 'col-span-7'}>Jogo</span>
               <span className="col-span-4">Plataformas</span>
-              <span className="col-span-1 text-right">Ação</span>
+              {user && <span className="col-span-1 text-right">Ação</span>}
             </div>
             {filteredGames.map((game) => (
               <div
@@ -544,7 +551,11 @@ export function CatalogView({
                   <ScoreBadge score={game.averageScore} size="xs" />
                 </div>
 
-                <div className="min-w-0 flex-1 sm:col-span-6 flex items-center gap-2">
+                <div
+                  className={`min-w-0 flex-1 ${
+                    user ? 'sm:col-span-6' : 'sm:col-span-7'
+                  } flex items-center gap-2`}
+                >
                   <button
                     type="button"
                     onClick={() => onSelectGame(game.id)}
@@ -573,15 +584,17 @@ export function CatalogView({
                   {game.platforms.join(' · ')}
                 </p>
 
-                <div className="sm:col-span-1 flex justify-end shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => onOpenReview(game)}
-                    className="text-xs font-medium text-[#A8ACA5] hover:text-[#4ADE80] transition-colors whitespace-nowrap cursor-pointer"
-                  >
-                    Avaliar
-                  </button>
-                </div>
+                {user && (
+                  <div className="sm:col-span-1 flex justify-end shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => onOpenReview(game)}
+                      className="text-xs font-medium text-[#A8ACA5] hover:text-[#4ADE80] transition-colors whitespace-nowrap cursor-pointer"
+                    >
+                      Avaliar
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -650,13 +663,15 @@ export function CatalogView({
                         ? 'Sem notas'
                         : `${scoreMeta.shortLabel} · ${game.reviewCount}`}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => onOpenReview(game)}
-                      className="font-medium text-[#F2F2EE] hover:text-[#4ADE80] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      Avaliar
-                    </button>
+                    {user && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenReview(game)}
+                        className="font-medium text-[#F2F2EE] hover:text-[#4ADE80] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                      >
+                        Avaliar
+                      </button>
+                    )}
                   </div>
                 </article>
               );

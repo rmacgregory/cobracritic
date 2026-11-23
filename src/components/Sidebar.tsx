@@ -4,9 +4,11 @@ import {
   CalendarRange,
   Check,
   ChevronDown,
+  Eye,
   Gamepad2,
   Home,
   LayoutGrid,
+  LogIn,
   LogOut,
   MessageSquareText,
   Search,
@@ -247,6 +249,7 @@ export function Sidebar({
     gamesWithStats,
     events,
     signOutUser,
+    exitReadOnlyMode,
   } = useVeredito();
 
   const genreCounts = useMemo(() => {
@@ -301,8 +304,12 @@ export function Sidebar({
     },
     { id: 'ranking', label: 'Ranking', icon: Award },
     { id: 'retrospective', label: 'Retrospectiva', icon: CalendarRange },
-    { id: 'members', label: 'Membros', icon: Users },
-    { id: 'profile', label: 'Meu Perfil', icon: User },
+    ...(user
+      ? [
+          { id: 'members' as const, label: 'Membros', icon: Users },
+          { id: 'profile' as const, label: 'Meu Perfil', icon: User },
+        ]
+      : []),
     ...(isAdmin
       ? [
           {
@@ -430,49 +437,83 @@ export function Sidebar({
         />
       </div>
 
-      {/* Member Footer Card with Quick Logout Button */}
+      {/* Member Footer Card with Quick Logout / Read-Only Login Button */}
       <div className="p-3 border-t border-[#232723] shrink-0 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => handleNavClick('profile')}
-          className="flex-1 min-w-0 p-2 rounded-md hover:bg-[#181B18] transition-colors flex items-center gap-2.5 text-left cursor-pointer"
-        >
-          {profile?.photoURL || user?.photoURL ? (
-            <img
-              src={profile?.photoURL || user?.photoURL || ''}
-              alt={displayName}
-              referrerPolicy="no-referrer"
-              className="w-9 h-9 rounded-full object-cover border border-[#2C312C] shrink-0"
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-[#222622] text-[#F2F2EE] text-xs font-semibold flex items-center justify-center shrink-0">
-              {initials}
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-[#F2F2EE] truncate">
-              {displayName}
-            </p>
-            <p className="text-[11px] text-[#8C9288] truncate">
-              {isMasterAdmin
-                ? 'Admin Mestre'
-                : isAdmin
-                  ? 'Administrador'
-                  : 'Grupo dos Cobras'}
-            </p>
-          </div>
-        </button>
+        {user ? (
+          <>
+            <button
+              type="button"
+              onClick={() => handleNavClick('profile')}
+              className="flex-1 min-w-0 p-2 rounded-md hover:bg-[#181B18] transition-colors flex items-center gap-2.5 text-left cursor-pointer"
+            >
+              {profile?.photoURL || user?.photoURL ? (
+                <img
+                  src={profile?.photoURL || user?.photoURL || ''}
+                  alt={displayName}
+                  referrerPolicy="no-referrer"
+                  className="w-9 h-9 rounded-full object-cover border border-[#2C312C] shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-[#222622] text-[#F2F2EE] text-xs font-semibold flex items-center justify-center shrink-0">
+                  {initials}
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[#F2F2EE] truncate">
+                  {displayName}
+                </p>
+                <p className="text-[11px] text-[#8C9288] truncate">
+                  {isMasterAdmin
+                    ? 'Admin Mestre'
+                    : isAdmin
+                      ? 'Administrador'
+                      : 'Grupo dos Cobras'}
+                </p>
+              </div>
+            </button>
 
-        <button
-          type="button"
-          onClick={signOutUser}
-          title="Sair da conta"
-          aria-label="Sair da conta"
-          className="inline-flex items-center gap-1 px-2.5 py-2 rounded-md border border-[#262B26] bg-[#0C0D0C] text-xs font-medium text-[#90968C] hover:text-[#F87171] hover:border-[#4A2525] hover:bg-[#1F1414] transition-colors shrink-0 cursor-pointer"
-        >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>Sair</span>
-        </button>
+            <button
+              type="button"
+              onClick={signOutUser}
+              title="Sair da conta"
+              aria-label="Sair da conta"
+              className="inline-flex items-center gap-1 px-2.5 py-2 rounded-md border border-[#262B26] bg-[#0C0D0C] text-xs font-medium text-[#90968C] hover:text-[#F87171] hover:border-[#4A2525] hover:bg-[#1F1414] transition-colors shrink-0 cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sair</span>
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="flex-1 min-w-0 p-1.5 flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-full bg-[#13261A] border border-[#2C6B41] text-[#86EFAC] flex items-center justify-center shrink-0">
+                <Eye className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-[#F2F2EE] truncate">
+                  Visitante
+                </p>
+                <p className="text-[11px] text-[#86EFAC] truncate">
+                  Somente leitura
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                onCloseMobile();
+                exitReadOnlyMode();
+              }}
+              title="Voltar para a tela de login"
+              aria-label="Voltar para a tela de login"
+              className="inline-flex items-center gap-1 px-2.5 py-2 rounded-md border border-[#2C342C] bg-[#0C0D0C] text-xs font-medium text-[#C8CBC4] hover:text-[#4ADE80] hover:border-[#4ADE80]/60 transition-colors shrink-0 cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Login</span>
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

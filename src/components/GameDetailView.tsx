@@ -31,7 +31,7 @@ interface GameDetailViewProps {
   onBack: () => void;
   onOpenReview: (game: GameWithStats, existing?: Review | null) => void;
   onEditGame: (game: GameWithStats) => void;
-  onSelectAuthor: (authorUid: string) => void;
+  onSelectAuthor?: (authorUid: string) => void;
 }
 
 export function GameDetailView({
@@ -304,6 +304,7 @@ export function GameDetailView({
           />
 
           {/* Report Incorrect Cover Control */}
+          {user && (
           <div className="space-y-2">
             {alreadyReportedCover && !showCoverReportForm ? (
               <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md bg-[#131F16] border border-[#244E33] text-xs text-[#86EFAC]">
@@ -393,6 +394,7 @@ export function GameDetailView({
               </p>
             )}
           </div>
+          )}
         </div>
 
         <div className="lg:col-span-8 flex flex-col justify-between gap-8">
@@ -400,13 +402,19 @@ export function GameDetailView({
             <div>
               <p className="text-xs text-[#8C9288]">
                 Ficha CobraCritic · Cadastrado por{' '}
-                <button
-                  type="button"
-                  onClick={() => onSelectAuthor(game.createdBy)}
-                  className="text-[#4ADE80] font-medium hover:underline cursor-pointer"
-                >
-                  {game.createdByName}
-                </button>
+                {onSelectAuthor ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelectAuthor(game.createdBy)}
+                    className="text-[#4ADE80] font-medium hover:underline cursor-pointer"
+                  >
+                    {game.createdByName}
+                  </button>
+                ) : (
+                  <span className="text-[#C8CBC4] font-medium">
+                    {game.createdByName}
+                  </span>
+                )}
               </p>
               <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-semibold text-[#F2F2EE] mt-2 leading-[1.08]">
                 {game.title}
@@ -454,40 +462,42 @@ export function GameDetailView({
                 reviewCount={game.reviewCount}
               />
 
-              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                <button
-                  type="button"
-                  disabled={statusBusy}
-                  onClick={() => handleTogglePlayStatus('wishlist')}
-                  aria-pressed={myStatus === 'wishlist'}
-                  title={
-                    myStatus === 'wishlist'
-                      ? 'Remover da sua lista Quero jogar'
-                      : 'Salvar na sua lista Quero jogar'
-                  }
-                  className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                    myStatus === 'wishlist'
-                      ? 'bg-[#20162B] border-[#6D44A3] text-[#E9D5FF] hover:bg-[#281B36]'
-                      : 'bg-[#0C0D0C] border-[#2E342E] text-[#C8CBC4] hover:border-[#C084FC]/60 hover:text-[#E9D5FF]'
-                  }`}
-                >
-                  <Bookmark
-                    className="w-4 h-4 shrink-0"
-                    fill={myStatus === 'wishlist' ? 'currentColor' : 'none'}
-                  />
-                  <span>
-                    {myStatus === 'wishlist' ? 'Na lista · Quero jogar' : 'Quero jogar'}
-                  </span>
-                </button>
+              {user && (
+                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                  <button
+                    type="button"
+                    disabled={statusBusy}
+                    onClick={() => handleTogglePlayStatus('wishlist')}
+                    aria-pressed={myStatus === 'wishlist'}
+                    title={
+                      myStatus === 'wishlist'
+                        ? 'Remover da sua lista Quero jogar'
+                        : 'Salvar na sua lista Quero jogar'
+                    }
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                      myStatus === 'wishlist'
+                        ? 'bg-[#20162B] border-[#6D44A3] text-[#E9D5FF] hover:bg-[#281B36]'
+                        : 'bg-[#0C0D0C] border-[#2E342E] text-[#C8CBC4] hover:border-[#C084FC]/60 hover:text-[#E9D5FF]'
+                    }`}
+                  >
+                    <Bookmark
+                      className="w-4 h-4 shrink-0"
+                      fill={myStatus === 'wishlist' ? 'currentColor' : 'none'}
+                    />
+                    <span>
+                      {myStatus === 'wishlist' ? 'Na lista · Quero jogar' : 'Quero jogar'}
+                    </span>
+                  </button>
 
-                <button
-                  type="button"
-                  onClick={() => onOpenReview(game, myReview)}
-                  className="px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  {myReview ? 'Editar minha avaliação' : 'Avaliar jogo'}
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    onClick={() => onOpenReview(game, myReview)}
+                    className="px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    {myReview ? 'Editar minha avaliação' : 'Avaliar jogo'}
+                  </button>
+                </div>
+              )}
             </div>
 
             {game.reviewCount > 0 && (
@@ -537,7 +547,9 @@ export function GameDetailView({
             )}
 
             {/* Personal Play Progress Selector & Group Activity */}
+            {(user || gameStatuses.length > 0) && (
             <div className="space-y-4 pt-4 border-t border-[#222622]">
+              {user && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-[#A8ACA5]">
@@ -578,9 +590,10 @@ export function GameDetailView({
                   })}
                 </div>
               </div>
+              )}
 
               {gameStatuses.length > 0 && (
-                <div className="space-y-2.5 pt-2 border-t border-[#1E221E]">
+                <div className={`space-y-2.5 ${user ? 'pt-2 border-t border-[#1E221E]' : ''}`}>
                   <p className="text-xs font-medium text-[#8C9288]">
                     Atividade dos Cobras ({gameStatuses.length})
                   </p>
@@ -601,7 +614,7 @@ export function GameDetailView({
                             {entries.map((entry) => {
                               const liveMember = membersById[entry.userId];
                               const name = liveMember?.displayName || entry.userName;
-                              return (
+                              return onSelectAuthor ? (
                                 <button
                                   key={entry.id}
                                   type="button"
@@ -618,6 +631,21 @@ export function GameDetailView({
                                     {name.split(' ')[0]}
                                   </span>
                                 </button>
+                              ) : (
+                                <span
+                                  key={entry.id}
+                                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-[#0C0D0C] border border-[#232823] text-[#C8CBC4]"
+                                >
+                                  <MemberAvatar
+                                    name={name}
+                                    primarySrc={liveMember?.photoURL || ''}
+                                    fallbackSrc={entry.userPhotoURL}
+                                    size="xs"
+                                  />
+                                  <span className="max-w-[120px] truncate">
+                                    {name.split(' ')[0]}
+                                  </span>
+                                </span>
                               );
                             })}
                           </div>
@@ -628,6 +656,7 @@ export function GameDetailView({
                 </div>
               )}
             </div>
+            )}
           </div>
         </div>
       </section>
@@ -646,18 +675,24 @@ export function GameDetailView({
         {game.reviews.length === 0 ? (
           <div className="border border-[#262A26] bg-[#141614] px-8 py-12 text-center space-y-4">
             <p className="font-display text-xl font-semibold text-[#F2F2EE]">
-              Seja o primeiro Cobra a avaliar {game.title}
+              {user
+                ? `Seja o primeiro Cobra a avaliar ${game.title}`
+                : `Nenhuma crítica publicada ainda para ${game.title}`}
             </p>
             <p className="text-sm text-[#90968C] max-w-md mx-auto">
-              Dê uma nota de 0 a 100 e compartilhe sua análise para abrir a pontuação média.
+              {user
+                ? 'Dê uma nota de 0 a 100 e compartilhe sua análise para abrir a pontuação média.'
+                : 'Assim que os membros avaliarem este jogo, as críticas aparecerão aqui.'}
             </p>
-            <button
-              type="button"
-              onClick={() => onOpenReview(game, null)}
-              className="px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors cursor-pointer"
-            >
-              Publicar primeira crítica
-            </button>
+            {user && (
+              <button
+                type="button"
+                onClick={() => onOpenReview(game, null)}
+                className="px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors cursor-pointer"
+              >
+                Publicar primeira crítica
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-6 max-w-4xl">
