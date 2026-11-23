@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { EyeOff, Trash2, X } from 'lucide-react';
 import {
   LIMITS,
   PLATFORMS,
@@ -34,6 +34,9 @@ export function ReviewFormModal({
       existingReview?.ratingOnly ||
         (existingReview && !existingReview.headline.trim() && !existingReview.body.trim()),
     ),
+  );
+  const [hasSpoiler, setHasSpoiler] = useState<boolean>(
+    Boolean(existingReview?.hasSpoiler),
   );
   const [headline, setHeadline] = useState(existingReview?.headline || '');
   const [body, setBody] = useState(existingReview?.body || '');
@@ -86,6 +89,7 @@ export function ReviewFormModal({
       await onSubmit({
         score,
         ratingOnly,
+        hasSpoiler: ratingOnly ? false : hasSpoiler,
         headline: ratingOnly ? '' : headline.trim(),
         body: ratingOnly ? '' : body.trim(),
         platformPlayed,
@@ -297,6 +301,33 @@ export function ReviewFormModal({
                   className="w-full px-3.5 py-2.5 text-sm bg-[#0C0D0C] border border-[#2C312C] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] leading-relaxed focus:outline-none focus:border-[#4ADE80]"
                 />
               </div>
+
+              <label
+                htmlFor="review-has-spoiler"
+                className={`flex items-start gap-3 p-3.5 rounded-md border transition-colors cursor-pointer select-none ${
+                  hasSpoiler
+                    ? 'bg-[#221C10] border-[#66511D]'
+                    : 'bg-[#0C0D0C] border-[#262A26] hover:border-[#3A403A]'
+                }`}
+              >
+                <input
+                  id="review-has-spoiler"
+                  type="checkbox"
+                  checked={hasSpoiler}
+                  onChange={(e) => setHasSpoiler(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 rounded accent-[#FBBF24] cursor-pointer shrink-0"
+                />
+                <div className="space-y-0.5">
+                  <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[#F2F2EE]">
+                    <EyeOff className="w-3.5 h-3.5 text-[#FBBF24]" />
+                    <span>Esta crítica contém spoilers</span>
+                  </span>
+                  <span className="block text-xs text-[#90968C] leading-relaxed">
+                    O texto da crítica ficará oculto por um aviso de spoiler até que cada
+                    membro clique para revelar.
+                  </span>
+                </div>
+              </label>
             </>
           )}
 

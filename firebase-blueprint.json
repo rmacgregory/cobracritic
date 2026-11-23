@@ -200,6 +200,10 @@
           "type": "boolean",
           "description": "True when the member chose to submit only a numeric score without writing a critique."
         },
+        "hasSpoiler": {
+          "type": "boolean",
+          "description": "True when the written critique contains story or gameplay spoilers and should be veiled by default."
+        },
         "headline": {
           "type": "string",
           "minLength": 0,
@@ -310,6 +314,14 @@
           "minLength": 1,
           "maxLength": 80,
           "description": "Optional display name of the member being replied to inside the thread."
+        },
+        "hasSpoiler": {
+          "type": "boolean",
+          "description": "True when the comment contains spoilers and should be veiled until revealed."
+        },
+        "mentionedUserIds": {
+          "type": "array",
+          "description": "Optional bounded list (0 to 8) of UIDs mentioned via @member in this comment."
         },
         "visibility": {
           "type": "string",
@@ -513,10 +525,20 @@
           "maxLength": 500,
           "description": "Optional event description or rules."
         },
+        "mode": {
+          "type": "string",
+          "enum": ["poll", "award"],
+          "description": "Event mode: poll (highest voted wins) or award (admin picks official live winners and scores member predictions)."
+        },
+        "deadlineAt": {
+          "type": "string",
+          "maxLength": 32,
+          "description": "Optional ISO local deadline string (YYYY-MM-DDTHH:mm) for countdown display."
+        },
         "status": {
           "type": "string",
-          "enum": ["active", "inactive", "closed"],
-          "description": "Lifecycle status: active (voting open), inactive (paused/draft), closed (winners declared)."
+          "enum": ["nominating", "active", "inactive", "closed"],
+          "description": "Lifecycle status: nominating (members nominate 1 game), active (voting open), inactive (paused/draft), closed (winners declared)."
         },
         "categories": {
           "type": "array",
@@ -722,6 +744,217 @@
         "createdAt",
         "updatedAt"
       ]
+    },
+    "EventNomination": {
+      "title": "EventNomination",
+      "description": "A single game nominated by a member during an event's nominating phase (deterministic ID {eventId}_{userId}).",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Reference ID of the parent event."
+        },
+        "gameId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional catalog game ID (empty for manual title nomination)."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Nominated game title."
+        },
+        "coverUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional cover image URL."
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the nominating member."
+        },
+        "userName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the nominating member."
+        },
+        "userPhotoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional HTTPS avatar URL."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group scope identifier."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of nomination creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "eventId",
+        "gameId",
+        "title",
+        "coverUrl",
+        "userId",
+        "userName",
+        "userPhotoURL",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserGameStatus": {
+      "title": "UserGameStatus",
+      "description": "Personal play status of a member for a catalog game (deterministic ID {gameId}_{userId}).",
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Reference ID of the catalog game."
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the member."
+        },
+        "userName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the member."
+        },
+        "userPhotoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional HTTPS avatar URL."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["playing", "completed", "platinum", "wishlist", "dropped"],
+          "description": "Member play status for this game."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group scope identifier."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of status creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of status update."
+        }
+      },
+      "required": [
+        "gameId",
+        "userId",
+        "userName",
+        "userPhotoURL",
+        "status",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "FeaturedRoundConfig": {
+      "title": "FeaturedRoundConfig",
+      "description": "Admin-pinned current Game of the Round highlighted at the top of the catalog and social feed.",
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional catalog game ID."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Pinned game title."
+        },
+        "coverUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional cover URL."
+        },
+        "roundLabel": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Label of the current round or event."
+        },
+        "eventId": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "Optional originating event ID."
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 240,
+          "description": "Optional short note for the group."
+        },
+        "pinnedBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the admin who pinned the round game."
+        },
+        "pinnedByName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the admin."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group scope identifier."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of update."
+        }
+      },
+      "required": [
+        "gameId",
+        "title",
+        "coverUrl",
+        "roundLabel",
+        "eventId",
+        "note",
+        "pinnedBy",
+        "pinnedByName",
+        "visibility",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -755,11 +988,23 @@
     },
     "/events/{eventId}": {
       "schema": { "$ref": "#/entities/Event" },
-      "description": "Admin-managed awards and voting events with categories, nominated games, and winners."
+      "description": "Admin-managed awards and voting events with categories, nominated games, mode, deadline, and winners."
     },
     "/eventVotes/{voteId}": {
       "schema": { "$ref": "#/entities/EventVote" },
       "description": "Public member votes per event category. Deterministic ID {eventId}_{categoryId}_{userId} enforces one vote per member per category."
+    },
+    "/eventNominations/{nominationId}": {
+      "schema": { "$ref": "#/entities/EventNomination" },
+      "description": "Single game nomination per member during an event's nominating phase. Deterministic ID {eventId}_{userId}."
+    },
+    "/userGameStatuses/{statusId}": {
+      "schema": { "$ref": "#/entities/UserGameStatus" },
+      "description": "Member play status per catalog game. Deterministic ID {gameId}_{userId}."
+    },
+    "/groupConfig/{configId}": {
+      "schema": { "$ref": "#/entities/FeaturedRoundConfig" },
+      "description": "Admin-managed shared group highlights such as the pinned Game of the Round (featuredRound)."
     },
     "/coverReports/{reportId}": {
       "schema": { "$ref": "#/entities/CoverReport" },

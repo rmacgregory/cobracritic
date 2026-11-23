@@ -32,7 +32,11 @@ export const LIMITS = {
   EVENT_CATEGORY_NAME_MAX: 100,
   EVENT_NOMINEES_MAX: 16,
   EVENT_NOMINEE_TITLE_MAX: 120,
+  EVENT_DEADLINE_MAX: 32,
   COVER_REPORT_NOTE_MAX: 300,
+  FEATURED_ROUND_LABEL_MAX: 80,
+  FEATURED_ROUND_NOTE_MAX: 240,
+  COMMENT_MENTIONS_MAX: 8,
 } as const;
 
 export const BAYESIAN_WEIGHT_PRIOR = 3;
@@ -168,6 +172,7 @@ export interface Review {
   authorPhotoURL: string;
   score: number; // 0..100 integer
   ratingOnly?: boolean;
+  hasSpoiler?: boolean;
   headline: string;
   body: string;
   platformPlayed: string;
@@ -187,6 +192,8 @@ export interface ReviewComment {
   body: string;
   parentCommentId?: string;
   replyToAuthorName?: string;
+  hasSpoiler?: boolean;
+  mentionedUserIds?: string[];
   visibility: 'group';
   createdAt?: Timestamp | null;
 }
@@ -221,7 +228,9 @@ export interface UserBan {
   createdAt?: Timestamp | null;
 }
 
-export type EventStatus = 'active' | 'inactive' | 'closed';
+export type EventStatus = 'nominating' | 'active' | 'inactive' | 'closed';
+
+export type EventMode = 'poll' | 'award';
 
 export interface EventNominee {
   id: string;
@@ -241,6 +250,8 @@ export interface CobraEvent {
   id: string;
   title: string;
   description: string;
+  mode?: EventMode;
+  deadlineAt?: string; // YYYY-MM-DDTHH:mm or ''
   status: EventStatus;
   categories: EventCategory[];
   createdBy: string;
@@ -261,6 +272,92 @@ export interface EventVote {
   userPhotoURL: string;
   visibility: 'group';
   createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export interface EventNomination {
+  id: string;
+  eventId: string;
+  gameId: string;
+  title: string;
+  coverUrl: string;
+  userId: string;
+  userName: string;
+  userPhotoURL: string;
+  visibility: 'group';
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export type GamePlayStatus = 'playing' | 'completed' | 'platinum' | 'wishlist' | 'dropped';
+
+export const GAME_PLAY_STATUS_LIST: readonly GamePlayStatus[] = [
+  'playing',
+  'completed',
+  'platinum',
+  'wishlist',
+  'dropped',
+] as const;
+
+export const GAME_PLAY_STATUS_META: Record<
+  GamePlayStatus,
+  { label: string; shortLabel: string; colorClass: string; activeClass: string }
+> = {
+  playing: {
+    label: 'Jogando',
+    shortLabel: 'Jogando',
+    colorClass: 'text-[#4ADE80]',
+    activeClass: 'bg-[#13261A] border-[#2C6B41] text-[#4ADE80]',
+  },
+  completed: {
+    label: 'Zerado',
+    shortLabel: 'Zerado',
+    colorClass: 'text-[#60A5FA]',
+    activeClass: 'bg-[#121D2D] border-[#2A4C7C] text-[#93C5FD]',
+  },
+  platinum: {
+    label: 'Platinado',
+    shortLabel: 'Platinado',
+    colorClass: 'text-[#FBBF24]',
+    activeClass: 'bg-[#261E0F] border-[#66511D] text-[#FDE68A]',
+  },
+  wishlist: {
+    label: 'Quero jogar',
+    shortLabel: 'Quero jogar',
+    colorClass: 'text-[#C084FC]',
+    activeClass: 'bg-[#20162B] border-[#533378] text-[#D8B4FE]',
+  },
+  dropped: {
+    label: 'Dropado',
+    shortLabel: 'Dropado',
+    colorClass: 'text-[#F87171]',
+    activeClass: 'bg-[#261414] border-[#5B2727] text-[#FCA5A5]',
+  },
+};
+
+export interface UserGameStatus {
+  id: string;
+  gameId: string;
+  userId: string;
+  userName: string;
+  userPhotoURL: string;
+  status: GamePlayStatus;
+  visibility: 'group';
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export interface FeaturedRoundGame {
+  id: string;
+  gameId: string;
+  title: string;
+  coverUrl: string;
+  roundLabel: string;
+  eventId: string;
+  note: string;
+  pinnedBy: string;
+  pinnedByName: string;
+  visibility: 'group';
   updatedAt?: Timestamp | null;
 }
 
@@ -307,6 +404,7 @@ export interface GameInput {
 export interface ReviewInput {
   score: number;
   ratingOnly?: boolean;
+  hasSpoiler?: boolean;
   headline: string;
   body: string;
   platformPlayed: string;
@@ -492,6 +590,7 @@ export type ActiveTab =
   | 'feed'
   | 'events'
   | 'ranking'
+  | 'retrospective'
   | 'members'
   | 'profile'
   | 'admin';

@@ -1,9 +1,29 @@
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Ban, Search, ShieldCheck, ShieldOff, UserCheck } from 'lucide-react';
+import {
+  ArrowLeft,
+  Ban,
+  HeartHandshake,
+  Search,
+  Share2,
+  ShieldCheck,
+  ShieldOff,
+  UserCheck,
+} from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
-import { LIMITS, type GameWithStats, type Review, type UserProfile } from '../types';
+import {
+  GAME_PLAY_STATUS_LIST,
+  GAME_PLAY_STATUS_META,
+  LIMITS,
+  type GamePlayStatus,
+  type GameWithStats,
+  type Review,
+  type UserProfile,
+} from '../types';
+import { computeTasteAffinity, type MemberTasteAffinity } from '../utils/affinity';
+import { GameCover } from './GameCover';
 import { ReviewCard } from './ReviewCard';
 import { ScoreBadge } from './ScoreBadge';
+import { ShareCardModal } from './ShareCardModal';
 
 interface MembersViewProps {
   selectedMemberId: string | null;
@@ -12,7 +32,7 @@ interface MembersViewProps {
   onEditReview: (game: GameWithStats, review: Review) => void;
 }
 
-type MemberSort = 'reviews_desc' | 'avg_desc' | 'avg_asc' | 'name_asc';
+type MemberSort = 'reviews_desc' | 'affinity_desc' | 'avg_desc' | 'avg_asc' | 'name_asc';
 
 interface MemberWithStats extends UserProfile {
   reviewCount: number;
@@ -20,6 +40,7 @@ interface MemberWithStats extends UserProfile {
   gamesRegistered: number;
   commentsCount: number;
   memberReviews: Review[];
+  affinity: MemberTasteAffinity | null;
 }
 
 export function MembersView({
@@ -37,6 +58,7 @@ export function MembersView({
     gamesWithStats,
     reviews,
     comments,
+    userGameStatuses,
     grantAdmin,
     revokeAdmin,
     banUser,
@@ -48,6 +70,8 @@ export function MembersView({
   const [showBanInput, setShowBanInput] = useState(false);
   const [banReason, setBanReason] = useState('');
   const [modBusy, setModBusy] = useState(false);
+  const [shelfStatus, setShelfStatus] = useState<GamePlayStatus>('playing');
+  const [showShareTop5, setShowShareTop5] = useState(false);
 
   const gamesById = useMemo(() => {
     const map = new Map<string, GameWithStats>();
@@ -78,6 +102,13 @@ export function MembersView({
         (c) => c.authorId === member.uid,
       ).length;
 
+      const affinity = computeTasteAffinity(
+        user?.uid,
+        member.uid,
+        reviews,
+        gamesById,
+      );
+
       return {
         ...member,
         reviewCount: count,
@@ -85,14 +116,41 @@ export function MembersView({
         gamesRegistered,
         commentsCount,
         memberReviews,
+        affinity,
       };
     });
-  }, [members, reviews, gamesWithStats, comments]);
+  }, [members, reviews, gamesWithStats, comments, user?.uid, gamesById]);
 
   const activeMember = useMemo(() => {
     if (!selectedMemberId) return null;
     return membersWithStats.find((m) => m.uid === selectedMemberId) || null;
   }, [membersWithStats, selectedMemberId]);
+
+  const activeMemberShelf = useMemo(() => {
+    const grouped: Record<GamePlayStatus, GameWithStats[]> = {
+      playing: [],
+      completed: [],
+      platinum: [],
+      wishlist: [],
+      dropped: [],
+    };
+    if (!activeMember) return grouped;
+    for (const entry of userGameStatuses) {
+      if (entry.userId !== activeMember.uid) continue;
+      const g = gamesById.get(entry.gameId);
+      if (g) grouped[entry.status].push(g);
+    }
+    return grouped;
+  }, [activeMember, userGameStatuses, gamesById]);
+
+  const activeMemberShelfTotal = useMemo(
+    () =>
+      GAME_PLAY_STATUS_LIST.reduce(
+        (sum, st) => sum + activeMemberShelf[st].length,
+        0,
+      ),
+    [activeMemberShelf],
+  );
 
   const filteredMembers = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -113,6 +171,8 @@ export function MembersView({
         case 'reviews_desc':
           if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount;
           return a.displayName.localeCompare(b.displayName, 'pt-BR');
+        case 'affinity_desc':
+          return (b.affinity?.affinityPct ?? -1) - (a.affinity?.affinityPct ?? -1);
         case 'avg_desc':
           return (b.averageScore ?? -1) - (a.averageScore ?? -1);
         case 'avg_asc':
@@ -322,16 +382,130 @@ export function MembersView({
           </dl>
         </section>
 
+        {/* Taste Affinity Panel (when viewing another member) */}
+        {user && activeMember.uid !== user.uid && (
+          <section className="bg-[#141614] border border-[#262A26] p-6 space-y-4 max-w-4xl">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-xs font-medium text-[#4ADE80] flex items-center gap-1.5">
+                  <HeartHandshake className="w-3.5 h-3.5" />
+                  <span>Afinidade de gosto com você</span>
+                </p>
+                {activeMember.affinity ? (
+                  <p className="text-sm text-[#A8ACA5] tabular-nums">
+                    Calculada sobre{' '}
+                    <strong className="text-[#F2F2EE]">
+                      {activeMember.affinity.commonCount}{' '}
+                      {activeMember.affinity.commonCount === 1
+                        ? 'jogo avaliado em comum'
+                        : 'jogos avaliados em comum'}
+                    </strong>{' '}
+                    (diferença média de {activeMember.affinity.avgDiff} pts).
+                  </p>
+                ) : (
+                  <p className="text-sm text-[#90968C]">
+                    Vocês ainda não avaliaram nenhum jogo em comum para calcular a afinidade.
+                  </p>
+                )}
+              </div>
+
+              {activeMember.affinity && (
+                <div className="text-right shrink-0">
+                  <p
+                    className={`font-mono text-3xl sm:text-4xl font-bold tabular-nums leading-none ${activeMember.affinity.accentClass}`}
+                  >
+                    {activeMember.affinity.affinityPct}%
+                  </p>
+                  <p className="text-xs font-medium text-[#C8CBC4] mt-1">
+                    {activeMember.affinity.label}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {activeMember.affinity && (
+              <>
+                <div className="h-2 w-full bg-[#202420] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full ${activeMember.affinity.barClass}`}
+                    style={{ width: `${activeMember.affinity.affinityPct}%` }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  {activeMember.affinity.closestGame && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        activeMember.affinity?.closestGame &&
+                        onSelectGame(activeMember.affinity.closestGame.gameId)
+                      }
+                      className="p-3.5 rounded-md bg-[#0C0D0C] border border-[#232923] hover:border-[#4ADE80]/60 text-left space-y-1 transition-colors cursor-pointer"
+                    >
+                      <p className="text-[11px] font-mono uppercase tracking-wider text-[#4ADE80]">
+                        Maior sintonia
+                      </p>
+                      <p className="text-sm font-semibold text-[#F2F2EE] truncate">
+                        {activeMember.affinity.closestGame.gameTitle}
+                      </p>
+                      <p className="text-xs text-[#90968C] font-mono tabular-nums">
+                        Você: <strong className="text-[#F2F2EE]">{activeMember.affinity.closestGame.myScore}</strong>
+                        {' · '}
+                        {activeMember.displayName.split(' ')[0]}:{' '}
+                        <strong className="text-[#F2F2EE]">{activeMember.affinity.closestGame.theirScore}</strong>
+                      </p>
+                    </button>
+                  )}
+
+                  {activeMember.affinity.mostDivergentGame && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        activeMember.affinity?.mostDivergentGame &&
+                        onSelectGame(activeMember.affinity.mostDivergentGame.gameId)
+                      }
+                      className="p-3.5 rounded-md bg-[#0C0D0C] border border-[#2A261E] hover:border-[#FBBF24]/60 text-left space-y-1 transition-colors cursor-pointer"
+                    >
+                      <p className="text-[11px] font-mono uppercase tracking-wider text-[#FBBF24]">
+                        Maior divergência
+                      </p>
+                      <p className="text-sm font-semibold text-[#F2F2EE] truncate">
+                        {activeMember.affinity.mostDivergentGame.gameTitle}
+                      </p>
+                      <p className="text-xs text-[#90968C] font-mono tabular-nums">
+                        Você: <strong className="text-[#F2F2EE]">{activeMember.affinity.mostDivergentGame.myScore}</strong>
+                        {' · '}
+                        {activeMember.displayName.split(' ')[0]}:{' '}
+                        <strong className="text-[#F2F2EE]">{activeMember.affinity.mostDivergentGame.theirScore}</strong>
+                      </p>
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+        )}
+
         {/* Member's TOP 5 Jogos da Vida */}
         {topFive.length > 0 && (
           <section className="bg-[#141614] border border-[#262A26] p-6 space-y-4 max-w-4xl">
-            <div className="flex items-baseline justify-between gap-4">
-              <h2 className="font-display text-xl font-semibold text-[#F2F2EE]">
-                TOP 5 Jogos da Vida
-              </h2>
-              <span className="text-xs font-mono text-[#787D75]">
-                Favoritos de {activeMember.displayName.split(' ')[0]}
-              </span>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <h2 className="font-display text-xl font-semibold text-[#F2F2EE]">
+                  TOP 5 Jogos da Vida
+                </h2>
+                <span className="text-xs font-mono text-[#787D75]">
+                  Favoritos de {activeMember.displayName.split(' ')[0]}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowShareTop5(true)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-[#2A2F2A] bg-[#0C0D0C] text-[#A8ACA5] hover:text-[#4ADE80] hover:border-[#4ADE80]/60 rounded-md transition-colors cursor-pointer"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>Compartilhar</span>
+              </button>
             </div>
             <ol className="divide-y divide-[#202420]">
               {topFive.map((title, idx) => {
@@ -349,12 +523,12 @@ export function MembersView({
                         <button
                           type="button"
                           onClick={() => onSelectGame(catalogMatch.id)}
-                          className="font-serif text-base text-[#F2F2EE] hover:text-[#4ADE80] truncate text-left cursor-pointer"
+                          className="font-display text-base font-medium text-[#F2F2EE] hover:text-[#4ADE80] truncate text-left cursor-pointer"
                         >
                           {title}
                         </button>
                       ) : (
-                        <span className="font-serif text-base text-[#F2F2EE] truncate">
+                        <span className="font-display text-base font-medium text-[#F2F2EE] truncate">
                           {title}
                         </span>
                       )}
@@ -368,6 +542,75 @@ export function MembersView({
                 );
               })}
             </ol>
+          </section>
+        )}
+
+        {/* Member's Estante de Jogos */}
+        {activeMemberShelfTotal > 0 && (
+          <section className="bg-[#141614] border border-[#262A26] p-6 space-y-4 max-w-4xl">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-display text-xl font-semibold text-[#F2F2EE]">
+                Estante de Jogos
+              </h2>
+              <span className="text-xs font-mono text-[#787D75] tabular-nums">
+                {activeMemberShelfTotal}{' '}
+                {activeMemberShelfTotal === 1 ? 'jogo marcado' : 'jogos marcados'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {GAME_PLAY_STATUS_LIST.map((st) => {
+                const meta = GAME_PLAY_STATUS_META[st];
+                const count = activeMemberShelf[st].length;
+                const active = shelfStatus === st;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setShelfStatus(st)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors tabular-nums cursor-pointer ${
+                      active
+                        ? meta.activeClass
+                        : 'bg-[#0C0D0C] border-[#262B26] text-[#90968C] hover:text-[#F2F2EE]'
+                    }`}
+                  >
+                    {meta.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            {activeMemberShelf[shelfStatus].length === 0 ? (
+              <p className="text-xs text-[#8C9288] py-2">
+                Nenhum jogo marcado como “{GAME_PLAY_STATUS_META[shelfStatus].label}”.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {activeMemberShelf[shelfStatus].map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => onSelectGame(g.id)}
+                    className="flex items-center gap-3 p-2.5 rounded-md bg-[#0C0D0C] border border-[#232823] hover:border-[#4ADE80]/60 transition-colors text-left cursor-pointer"
+                  >
+                    <GameCover
+                      title={g.title}
+                      coverUrl={g.coverUrl}
+                      compact
+                      className="w-10 shrink-0 rounded-[2px]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[#F2F2EE] truncate">
+                        {g.title}
+                      </p>
+                      <p className="text-[11px] text-[#8C9288] truncate">
+                        {g.releaseYear}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </section>
         )}
 
@@ -404,6 +647,19 @@ export function MembersView({
             </div>
           )}
         </section>
+        {showShareTop5 && topFive.length > 0 && (
+          <ShareCardModal
+            payload={{
+              kind: 'top5',
+              memberName: activeMember.displayName,
+              bio: activeMember.bio,
+              averageScore: activeMember.averageScore,
+              reviewCount: activeMember.reviewCount,
+              topFiveGames: topFive,
+            }}
+            onClose={() => setShowShareTop5(false)}
+          />
+        )}
       </main>
     );
   }
@@ -444,6 +700,7 @@ export function MembersView({
           className="px-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
         >
           <option value="reviews_desc">Mais críticas</option>
+          <option value="affinity_desc">Maior afinidade comigo</option>
           <option value="avg_desc">Maior média dada</option>
           <option value="avg_asc">Mais exigentes (menor média)</option>
           <option value="name_asc">Ordem alfabética</option>
@@ -530,6 +787,16 @@ export function MembersView({
                     <p className="text-xs text-[#6E736B] italic">
                       Sem bio cadastrada.
                     </p>
+                  )}
+                  {member.affinity && (
+                    <div className="flex items-center justify-between gap-2 text-xs pt-1 tabular-nums">
+                      <span className={`font-medium ${member.affinity.accentClass}`}>
+                        {member.affinity.affinityPct}% afinidade · {member.affinity.label}
+                      </span>
+                      <span className="text-[11px] text-[#787D75]">
+                        {member.affinity.commonCount} em comum
+                      </span>
+                    </div>
                   )}
                 </div>
 

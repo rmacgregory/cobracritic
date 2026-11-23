@@ -46,17 +46,22 @@ import {
   type CobraEvent,
   type CoverReport,
   type EventCategory,
+  type EventMode,
+  type EventNomination,
   type EventNominee,
   type EventStatus,
   type EventVote,
+  type FeaturedRoundGame,
   type Game,
   type GameInput,
+  type GamePlayStatus,
   type GameWithStats,
   type Review,
   type ReviewComment,
   type ReviewInput,
   type ReviewReaction,
   type UserBan,
+  type UserGameStatus,
   type UserProfile,
 } from '../types';
 
@@ -81,6 +86,8 @@ export interface CommentNotification {
   authorFallbackPhotoURL: string;
   body: string;
   isReply?: boolean;
+  isMention?: boolean;
+  hasSpoiler?: boolean;
   createdAt?: ReviewComment['createdAt'];
   unread: boolean;
 }
@@ -168,6 +175,12 @@ interface VereditoContextValue {
   reactions: ReviewReaction[];
   events: CobraEvent[];
   eventVotes: EventVote[];
+  eventNominations: EventNomination[];
+  nominationsByEvent: Record<string, EventNomination[]>;
+  userGameStatuses: UserGameStatus[];
+  userStatusesByGame: Record<string, UserGameStatus[]>;
+  myStatusByGame: Record<string, GamePlayStatus>;
+  featuredRound: FeaturedRoundGame | null;
   coverReports: CoverReport[];
   openCoverReports: CoverReport[];
   myOpenCoverReportGameIds: Set<string>;
@@ -200,7 +213,12 @@ interface VereditoContextValue {
     reviewId: string,
     gameId: string,
     body: string,
-    replyOptions?: { parentCommentId: string; replyToAuthorName?: string },
+    options?: {
+      parentCommentId?: string;
+      replyToAuthorName?: string;
+      hasSpoiler?: boolean;
+      mentionedUserIds?: string[];
+    },
   ) => Promise<void>;
   deleteComment: (commentId: string) => Promise<void>;
   toggleReaction: (reviewId: string) => Promise<void>;
@@ -213,6 +231,8 @@ interface VereditoContextValue {
   createEvent: (input: {
     title: string;
     description: string;
+    mode?: EventMode;
+    deadlineAt?: string;
     status: EventStatus;
     categories?: EventCategory[];
   }) => Promise<string>;
@@ -221,6 +241,8 @@ interface VereditoContextValue {
     input: {
       title: string;
       description: string;
+      mode?: EventMode;
+      deadlineAt?: string;
       status: EventStatus;
       categories: EventCategory[];
     },
@@ -232,6 +254,22 @@ interface VereditoContextValue {
     nominee: EventNominee,
   ) => Promise<void>;
   removeEventVote: (eventId: string, categoryId: string) => Promise<void>;
+  saveEventNomination: (
+    eventId: string,
+    input: { gameId: string; title: string; coverUrl: string },
+  ) => Promise<void>;
+  deleteEventNomination: (eventId: string, targetUserId?: string) => Promise<void>;
+  setGamePlayStatus: (gameId: string, status: GamePlayStatus) => Promise<void>;
+  clearGamePlayStatus: (gameId: string) => Promise<void>;
+  pinFeaturedRound: (input: {
+    gameId: string;
+    title: string;
+    coverUrl: string;
+    roundLabel: string;
+    eventId?: string;
+    note?: string;
+  }) => Promise<void>;
+  unpinFeaturedRound: () => Promise<void>;
   reportIncorrectCover: (game: Game, note?: string) => Promise<void>;
   resolveCoverReport: (reportId: string) => Promise<void>;
   deleteCoverReport: (reportId: string) => Promise<void>;
@@ -257,6 +295,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   const [reactions, setReactions] = useState<ReviewReaction[]>([]);
   const [events, setEvents] = useState<CobraEvent[]>([]);
   const [eventVotes, setEventVotes] = useState<EventVote[]>([]);
+  const [eventNominations, setEventNominations] = useState<EventNomination[]>([]);
+  const [userGameStatuses, setUserGameStatuses] = useState<UserGameStatus[]>([]);
+  const [featuredRound, setFeaturedRound] = useState<FeaturedRoundGame | null>(null);
   const [coverReports, setCoverReports] = useState<CoverReport[]>([]);
   const [notifReadState, setNotifReadState] = useState<NotificationReadState>({
     readIds: [],
@@ -340,6 +381,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         setReactions([]);
         setEvents([]);
         setEventVotes([]);
+        setEventNominations([]);
+        setUserGameStatuses([]);
+        setFeaturedRound(null);
         setCoverReports([]);
         setLiveNotifId(null);
         setLiveCoverReportId(null);
@@ -461,9 +505,15 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
                   data.parentCommentId &&
                     myCommentIdsRef.current.has(data.parentCommentId),
                 );
+                const isMentioningMe = Boolean(
+                  Array.isArray(data.mentionedUserIds) &&
+                    data.mentionedUserIds.includes(user.uid),
+                );
                 if (
                   data.authorId !== user.uid &&
-                  (myReviewIdsRef.current.has(data.reviewId) || isReplyToMyComment)
+                  (myReviewIdsRef.current.has(data.reviewId) ||
+                    isReplyToMyComment ||
+                    isMentioningMe)
                 ) {
                   setLiveNotifId(docId);
                 }
@@ -515,6 +565,47 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       (err) => handleFirestoreError(err, OperationType.LIST, 'eventVotes'),
     );
 
+    const unsubEventNominations = onSnapshot(
+      query(collection(db, 'eventNominations'), where('visibility', '==', 'group')),
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<EventNomination, 'id'>),
+        }));
+        list.sort((a, b) => getTimeMillis(a.createdAt) - getTimeMillis(b.createdAt));
+        setEventNominations(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'eventNominations'),
+    );
+
+    const unsubUserGameStatuses = onSnapshot(
+      query(collection(db, 'userGameStatuses'), where('visibility', '==', 'group')),
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<UserGameStatus, 'id'>),
+        }));
+        list.sort((a, b) => getTimeMillis(b.updatedAt) - getTimeMillis(a.updatedAt));
+        setUserGameStatuses(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'userGameStatuses'),
+    );
+
+    const unsubFeaturedRound = onSnapshot(
+      doc(db, 'groupConfig', 'featuredRound'),
+      (snap) => {
+        if (!snap.exists()) {
+          setFeaturedRound(null);
+          return;
+        }
+        setFeaturedRound({
+          id: snap.id,
+          ...(snap.data() as Omit<FeaturedRoundGame, 'id'>),
+        });
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'groupConfig/featuredRound'),
+    );
+
     return () => {
       unsubUsers();
       unsubAdmins();
@@ -525,6 +616,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       unsubReactions();
       unsubEvents();
       unsubEventVotes();
+      unsubEventNominations();
+      unsubUserGameStatuses();
+      unsubFeaturedRound();
     };
   }, [authReady, user]);
 
@@ -733,6 +827,35 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     return map;
   }, [reactions]);
 
+  const nominationsByEvent = useMemo(() => {
+    const map: Record<string, EventNomination[]> = {};
+    for (const nom of eventNominations) {
+      if (!map[nom.eventId]) map[nom.eventId] = [];
+      map[nom.eventId].push(nom);
+    }
+    return map;
+  }, [eventNominations]);
+
+  const userStatusesByGame = useMemo(() => {
+    const map: Record<string, UserGameStatus[]> = {};
+    for (const st of userGameStatuses) {
+      if (!map[st.gameId]) map[st.gameId] = [];
+      map[st.gameId].push(st);
+    }
+    return map;
+  }, [userGameStatuses]);
+
+  const myStatusByGame = useMemo(() => {
+    const map: Record<string, GamePlayStatus> = {};
+    if (!user) return map;
+    for (const st of userGameStatuses) {
+      if (st.userId === user.uid) {
+        map[st.gameId] = st.status;
+      }
+    }
+    return map;
+  }, [userGameStatuses, user]);
+
   useEffect(() => {
     if (!user) {
       setNotifReadState({ readIds: [], readAllBeforeMs: 0 });
@@ -779,8 +902,6 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    if (myReviewsById.size === 0 && myCommentsById.size === 0) return [];
-
     const gamesById = new Map<string, Game>();
     for (const g of games) {
       gamesById.set(g.id, g);
@@ -795,7 +916,10 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         const replyToMyComment = Boolean(
           c.parentCommentId && myCommentsById.has(c.parentCommentId),
         );
-        return onMyReview || replyToMyComment;
+        const mentionedMe = Boolean(
+          Array.isArray(c.mentionedUserIds) && c.mentionedUserIds.includes(user.uid),
+        );
+        return onMyReview || replyToMyComment || mentionedMe;
       })
       .sort((a, b) => getTimeMillis(b.createdAt) - getTimeMillis(a.createdAt))
       .map((c) => {
@@ -804,6 +928,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         const createdMs = getTimeMillis(c.createdAt);
         const unread =
           !readIdSet.has(c.id) && createdMs > notifReadState.readAllBeforeMs;
+        const isMention = Boolean(
+          Array.isArray(c.mentionedUserIds) && c.mentionedUserIds.includes(user.uid),
+        );
         const isReply = Boolean(
           c.parentCommentId && myCommentsById.has(c.parentCommentId),
         );
@@ -820,6 +947,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           authorFallbackPhotoURL: c.authorPhotoURL || '',
           body: c.body,
           isReply,
+          isMention,
+          hasSpoiler: Boolean(c.hasSpoiler),
           createdAt: c.createdAt,
           unread,
         };
@@ -1177,10 +1306,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         const relatedReactions = reactions.filter((r) =>
           relatedReviewIds.has(r.reviewId),
         );
+        const relatedStatuses = userGameStatuses.filter((st) => st.gameId === gameId);
 
         await Promise.all([
           ...relatedComments.map((c) => deleteDoc(doc(db, 'comments', c.id))),
           ...relatedReactions.map((r) => deleteDoc(doc(db, 'reactions', r.id))),
+          ...relatedStatuses.map((st) => deleteDoc(doc(db, 'userGameStatuses', st.id))),
         ]);
         await Promise.all(
           relatedReviews.map((r) => deleteDoc(doc(db, 'reviews', r.id))),
@@ -1207,6 +1338,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const authorPhotoURL =
       sanitizeOptionalUrl(profile?.photoURL) || sanitizeOptionalUrl(user.photoURL);
     const ratingOnly = Boolean(input.ratingOnly);
+    const hasSpoiler = !ratingOnly && Boolean(input.hasSpoiler);
     const cleanHeadline = ratingOnly
       ? ''
       : input.headline.trim().slice(0, LIMITS.HEADLINE_MAX);
@@ -1221,6 +1353,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         await updateDoc(reviewRef, {
           score,
           ratingOnly,
+          hasSpoiler,
           headline: cleanHeadline,
           body: cleanBody,
           platformPlayed: cleanPlatform,
@@ -1241,6 +1374,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           authorPhotoURL,
           score,
           ratingOnly,
+          hasSpoiler,
           headline: cleanHeadline,
           body: cleanBody,
           platformPlayed: cleanPlatform,
@@ -1277,7 +1411,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     reviewId: string,
     gameId: string,
     body: string,
-    replyOptions?: { parentCommentId: string; replyToAuthorName?: string },
+    options?: {
+      parentCommentId?: string;
+      replyToAuthorName?: string;
+      hasSpoiler?: boolean;
+      mentionedUserIds?: string[];
+    },
   ) => {
     if (!user || isBanned) return;
     const cleanBody = body.trim().slice(0, LIMITS.COMMENT_BODY_MAX);
@@ -1297,14 +1436,31 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       createdAt: serverTimestamp(),
     };
 
-    const cleanParentId = replyOptions?.parentCommentId?.trim();
+    const cleanParentId = options?.parentCommentId?.trim();
     if (cleanParentId) {
       payload.parentCommentId = cleanParentId;
-      const cleanReplyAuthor = replyOptions?.replyToAuthorName
+      const cleanReplyAuthor = options?.replyToAuthorName
         ?.trim()
         .slice(0, LIMITS.DISPLAY_NAME_MAX);
       if (cleanReplyAuthor) {
         payload.replyToAuthorName = cleanReplyAuthor;
+      }
+    }
+
+    if (options?.hasSpoiler) {
+      payload.hasSpoiler = true;
+    }
+
+    if (Array.isArray(options?.mentionedUserIds) && options.mentionedUserIds.length > 0) {
+      const cleanMentions = Array.from(
+        new Set(
+          options.mentionedUserIds
+            .map((uid) => uid.trim())
+            .filter((uid) => uid !== user.uid && /^[a-zA-Z0-9_-]{1,128}$/.test(uid)),
+        ),
+      ).slice(0, LIMITS.COMMENT_MENTIONS_MAX);
+      if (cleanMentions.length > 0) {
+        payload.mentionedUserIds = cleanMentions;
       }
     }
 
@@ -1492,9 +1648,22 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       .filter((cat) => cat.name.length > 0);
   };
 
+  const sanitizeDeadline = (raw?: string): string => {
+    if (!raw) return '';
+    const trimmed = raw.trim().slice(0, LIMITS.EVENT_DEADLINE_MAX);
+    return /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}$/.test(trimmed) ? trimmed : '';
+  };
+
+  const sanitizeEventStatus = (raw: EventStatus): EventStatus => {
+    if (raw === 'nominating' || raw === 'active' || raw === 'closed') return raw;
+    return 'inactive';
+  };
+
   const createEvent = async (input: {
     title: string;
     description: string;
+    mode?: EventMode;
+    deadlineAt?: string;
     status: EventStatus;
     categories?: EventCategory[];
   }): Promise<string> => {
@@ -1506,8 +1675,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Informe o nome do evento.');
     }
     const cleanDesc = input.description.trim().slice(0, LIMITS.EVENT_DESCRIPTION_MAX);
-    const safeStatus: EventStatus =
-      input.status === 'active' || input.status === 'closed' ? input.status : 'inactive';
+    const safeMode: EventMode = input.mode === 'poll' ? 'poll' : 'award';
+    const safeDeadline = sanitizeDeadline(input.deadlineAt);
+    const safeStatus = sanitizeEventStatus(input.status);
     const cleanCategories = sanitizeEventCategories(input.categories || []);
 
     const eventId = createSafeId('evt');
@@ -1516,6 +1686,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       await setDoc(doc(db, 'events', eventId), {
         title: cleanTitle,
         description: cleanDesc,
+        mode: safeMode,
+        deadlineAt: safeDeadline,
         status: safeStatus,
         categories: cleanCategories,
         createdBy: user.uid,
@@ -1535,6 +1707,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     input: {
       title: string;
       description: string;
+      mode?: EventMode;
+      deadlineAt?: string;
       status: EventStatus;
       categories: EventCategory[];
     },
@@ -1547,8 +1721,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Informe o nome do evento.');
     }
     const cleanDesc = input.description.trim().slice(0, LIMITS.EVENT_DESCRIPTION_MAX);
-    const safeStatus: EventStatus =
-      input.status === 'active' || input.status === 'closed' ? input.status : 'inactive';
+    const safeMode: EventMode = input.mode === 'poll' ? 'poll' : 'award';
+    const safeDeadline = sanitizeDeadline(input.deadlineAt);
+    const safeStatus = sanitizeEventStatus(input.status);
     const cleanCategories = sanitizeEventCategories(input.categories);
 
     const path = `events/${eventId}`;
@@ -1556,6 +1731,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       await updateDoc(doc(db, 'events', eventId), {
         title: cleanTitle,
         description: cleanDesc,
+        mode: safeMode,
+        deadlineAt: safeDeadline,
         status: safeStatus,
         categories: cleanCategories,
         updatedAt: serverTimestamp(),
@@ -1572,9 +1749,11 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const path = `events/${eventId}`;
     try {
       const relatedVotes = eventVotes.filter((v) => v.eventId === eventId);
-      await Promise.all(
-        relatedVotes.map((v) => deleteDoc(doc(db, 'eventVotes', v.id))),
-      );
+      const relatedNominations = eventNominations.filter((n) => n.eventId === eventId);
+      await Promise.all([
+        ...relatedVotes.map((v) => deleteDoc(doc(db, 'eventVotes', v.id))),
+        ...relatedNominations.map((n) => deleteDoc(doc(db, 'eventNominations', n.id))),
+      ]);
       await deleteDoc(doc(db, 'events', eventId));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
@@ -1632,6 +1811,173 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const path = `eventVotes/${voteId}`;
     try {
       await deleteDoc(doc(db, 'eventVotes', voteId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const saveEventNomination = async (
+    eventId: string,
+    input: { gameId: string; title: string; coverUrl: string },
+  ) => {
+    if (!user || isBanned) {
+      throw new Error('Faça login para indicar um jogo.');
+    }
+    const cleanTitle = input.title.trim().slice(0, LIMITS.EVENT_NOMINEE_TITLE_MAX);
+    if (!cleanTitle) {
+      throw new Error('Informe o jogo que deseja indicar.');
+    }
+    const cleanGameId =
+      typeof input.gameId === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(input.gameId)
+        ? input.gameId
+        : '';
+    const cleanCoverUrl = sanitizeOptionalUrl(input.coverUrl);
+    const nomId = `${eventId}_${user.uid}`;
+    const nomRef = doc(db, 'eventNominations', nomId);
+    const path = `eventNominations/${nomId}`;
+    const userName = getCurrentDisplayName();
+    const userPhotoURL =
+      sanitizeOptionalUrl(profile?.photoURL) || sanitizeOptionalUrl(user.photoURL);
+
+    try {
+      const existingSnap = await getDoc(nomRef);
+      if (existingSnap.exists()) {
+        await updateDoc(nomRef, {
+          gameId: cleanGameId,
+          title: cleanTitle,
+          coverUrl: cleanCoverUrl,
+          userName,
+          userPhotoURL,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(nomRef, {
+          eventId,
+          gameId: cleanGameId,
+          title: cleanTitle,
+          coverUrl: cleanCoverUrl,
+          userId: user.uid,
+          userName,
+          userPhotoURL,
+          visibility: 'group' as const,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  };
+
+  const deleteEventNomination = async (eventId: string, targetUserId?: string) => {
+    if (!user || isBanned) return;
+    const uid = targetUserId && isAdmin ? targetUserId : user.uid;
+    const nomId = `${eventId}_${uid}`;
+    const path = `eventNominations/${nomId}`;
+    try {
+      await deleteDoc(doc(db, 'eventNominations', nomId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const setGamePlayStatus = async (gameId: string, status: GamePlayStatus) => {
+    if (!user || isBanned) return;
+    const statusId = `${gameId}_${user.uid}`;
+    const statusRef = doc(db, 'userGameStatuses', statusId);
+    const path = `userGameStatuses/${statusId}`;
+    const userName = getCurrentDisplayName();
+    const userPhotoURL =
+      sanitizeOptionalUrl(profile?.photoURL) || sanitizeOptionalUrl(user.photoURL);
+
+    try {
+      const existingSnap = await getDoc(statusRef);
+      if (existingSnap.exists()) {
+        await updateDoc(statusRef, {
+          status,
+          userName,
+          userPhotoURL,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(statusRef, {
+          gameId,
+          userId: user.uid,
+          userName,
+          userPhotoURL,
+          status,
+          visibility: 'group' as const,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  };
+
+  const clearGamePlayStatus = async (gameId: string) => {
+    if (!user || isBanned) return;
+    const statusId = `${gameId}_${user.uid}`;
+    const path = `userGameStatuses/${statusId}`;
+    try {
+      await deleteDoc(doc(db, 'userGameStatuses', statusId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const pinFeaturedRound = async (input: {
+    gameId: string;
+    title: string;
+    coverUrl: string;
+    roundLabel: string;
+    eventId?: string;
+    note?: string;
+  }) => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem fixar o Jogo da Rodada.');
+    }
+    const cleanTitle = input.title.trim().slice(0, LIMITS.GAME_TITLE_MAX);
+    if (!cleanTitle) throw new Error('Informe o título do Jogo da Rodada.');
+    const cleanLabel =
+      input.roundLabel.trim().slice(0, LIMITS.FEATURED_ROUND_LABEL_MAX) || 'Jogo da Rodada';
+    const cleanGameId =
+      typeof input.gameId === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(input.gameId)
+        ? input.gameId
+        : '';
+    const cleanEventId =
+      typeof input.eventId === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(input.eventId)
+        ? input.eventId
+        : '';
+    const cleanNote = (input.note || '').trim().slice(0, LIMITS.FEATURED_ROUND_NOTE_MAX);
+    const ref = doc(db, 'groupConfig', 'featuredRound');
+    const path = 'groupConfig/featuredRound';
+    try {
+      await setDoc(ref, {
+        gameId: cleanGameId,
+        title: cleanTitle,
+        coverUrl: sanitizeOptionalUrl(input.coverUrl),
+        roundLabel: cleanLabel,
+        eventId: cleanEventId,
+        note: cleanNote,
+        pinnedBy: user.uid,
+        pinnedByName: getCurrentDisplayName(),
+        visibility: 'group' as const,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  };
+
+  const unpinFeaturedRound = async () => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem desafixar o Jogo da Rodada.');
+    }
+    const path = 'groupConfig/featuredRound';
+    try {
+      await deleteDoc(doc(db, 'groupConfig', 'featuredRound'));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }
@@ -1742,6 +2088,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         reactions,
         events,
         eventVotes,
+        eventNominations,
+        nominationsByEvent,
+        userGameStatuses,
+        userStatusesByGame,
+        myStatusByGame,
+        featuredRound,
         coverReports,
         openCoverReports,
         myOpenCoverReportGameIds,
@@ -1779,6 +2131,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         deleteEvent,
         castEventVote,
         removeEventVote,
+        saveEventNomination,
+        deleteEventNomination,
+        setGamePlayStatus,
+        clearGamePlayStatus,
+        pinFeaturedRound,
+        unpinFeaturedRound,
         reportIncorrectCover,
         resolveCoverReport,
         deleteCoverReport,

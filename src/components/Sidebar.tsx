@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Award,
+  CalendarRange,
   Check,
   ChevronDown,
   Gamepad2,
@@ -280,7 +281,9 @@ export function Sidebar({
     .toUpperCase();
 
   const activeEventsCount = useMemo(
-    () => events.filter((ev) => ev.status === 'active').length,
+    () =>
+      events.filter((ev) => ev.status === 'active' || ev.status === 'nominating')
+        .length,
     [events],
   );
 
@@ -299,6 +302,7 @@ export function Sidebar({
       count: activeEventsCount > 0 ? activeEventsCount : undefined,
     },
     { id: 'ranking', label: 'Ranking', icon: Award },
+    { id: 'retrospective', label: 'Retrospectiva', icon: CalendarRange },
     { id: 'members', label: 'Membros', icon: Users, count: members.length },
     { id: 'profile', label: 'Meu Perfil', icon: User },
     ...(isAdmin

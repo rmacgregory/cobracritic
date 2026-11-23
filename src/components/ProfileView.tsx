@@ -5,12 +5,22 @@ import {
   Camera,
   LogOut,
   Plus,
+  Share2,
   X,
 } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
-import { LIMITS, type GameWithStats, type Review } from '../types';
+import {
+  GAME_PLAY_STATUS_LIST,
+  GAME_PLAY_STATUS_META,
+  LIMITS,
+  type GamePlayStatus,
+  type GameWithStats,
+  type Review,
+} from '../types';
 import { AvatarCropModal } from './AvatarCropModal';
+import { GameCover } from './GameCover';
 import { ReviewCard } from './ReviewCard';
+import { ShareCardModal } from './ShareCardModal';
 
 interface ProfileViewProps {
   onSelectGame: (gameId: string) => void;
@@ -24,6 +34,7 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
     gamesWithStats,
     reviews,
     comments,
+    userGameStatuses,
     updateUserProfile,
     signOutUser,
   } = useVeredito();
@@ -45,6 +56,8 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
 
   const [saving, setSaving] = useState(false);
   const [savedNotice, setSavedNotice] = useState(false);
+  const [showShareTop5, setShowShareTop5] = useState(false);
+  const [shelfStatus, setShelfStatus] = useState<GamePlayStatus>('playing');
 
   useEffect(() => {
     if (profile) {
@@ -99,6 +112,32 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
     const sum = myReviews.reduce((acc, r) => acc + r.score, 0);
     return Math.round(sum / myReviews.length);
   }, [myReviews]);
+
+  const myShelfByStatus = useMemo(() => {
+    const grouped: Record<GamePlayStatus, GameWithStats[]> = {
+      playing: [],
+      completed: [],
+      platinum: [],
+      wishlist: [],
+      dropped: [],
+    };
+    if (!user) return grouped;
+    for (const entry of userGameStatuses) {
+      if (entry.userId !== user.uid) continue;
+      const g = gamesById.get(entry.gameId);
+      if (g) grouped[entry.status].push(g);
+    }
+    return grouped;
+  }, [user, userGameStatuses, gamesById]);
+
+  const myTotalShelfCount = useMemo(
+    () =>
+      GAME_PLAY_STATUS_LIST.reduce(
+        (sum, st) => sum + myShelfByStatus[st].length,
+        0,
+      ),
+    [myShelfByStatus],
+  );
 
   const currentPhoto = profile?.photoURL || user?.photoURL || '';
   const shownName = profile?.displayName || user?.displayName || 'Seu Perfil';
@@ -538,13 +577,18 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
         <section className="lg:col-span-7 space-y-8">
           {(profile?.topFiveGames || []).length > 0 && (
             <div className="bg-[#141614] border border-[#262A26] p-6 space-y-4">
-              <div className="flex items-baseline justify-between gap-4">
-                <h2 className="font-serif text-xl font-medium text-[#F2F2EE]">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="font-display text-xl font-semibold text-[#F2F2EE]">
                   TOP 5 Jogos da Vida
                 </h2>
-                <span className="text-xs font-mono text-[#787D75]">
-                  Hall pessoal
-                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowShareTop5(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium border border-[#2A2F2A] bg-[#0C0D0C] text-[#A8ACA5] hover:text-[#4ADE80] hover:border-[#4ADE80]/60 rounded-md transition-colors cursor-pointer"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Compartilhar</span>
+                </button>
               </div>
               <ol className="divide-y divide-[#202420]">
                 {(profile?.topFiveGames || []).map((title, idx) => {
@@ -562,12 +606,12 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
                           <button
                             type="button"
                             onClick={() => onSelectGame(catalogMatch.id)}
-                            className="font-serif text-base text-[#F2F2EE] hover:text-[#4ADE80] truncate text-left cursor-pointer"
+                            className="font-display text-base font-medium text-[#F2F2EE] hover:text-[#4ADE80] truncate text-left cursor-pointer"
                           >
                             {title}
                           </button>
                         ) : (
-                          <span className="font-serif text-base text-[#F2F2EE] truncate">
+                          <span className="font-display text-base font-medium text-[#F2F2EE] truncate">
                             {title}
                           </span>
                         )}
@@ -583,6 +627,73 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
               </ol>
             </div>
           )}
+
+          {/* Estante de Jogos */}
+          <div className="bg-[#141614] border border-[#262A26] p-6 space-y-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-display text-xl font-semibold text-[#F2F2EE]">
+                Minha Estante de Jogos
+              </h2>
+              <span className="text-xs font-mono text-[#787D75] tabular-nums">
+                {myTotalShelfCount} {myTotalShelfCount === 1 ? 'jogo marcado' : 'jogos marcados'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {GAME_PLAY_STATUS_LIST.map((st) => {
+                const meta = GAME_PLAY_STATUS_META[st];
+                const count = myShelfByStatus[st].length;
+                const active = shelfStatus === st;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setShelfStatus(st)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors tabular-nums cursor-pointer ${
+                      active
+                        ? meta.activeClass
+                        : 'bg-[#0C0D0C] border-[#262B26] text-[#90968C] hover:text-[#F2F2EE]'
+                    }`}
+                  >
+                    {meta.label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            {myShelfByStatus[shelfStatus].length === 0 ? (
+              <p className="text-xs text-[#8C9288] py-3">
+                Nenhum jogo marcado como “{GAME_PLAY_STATUS_META[shelfStatus].label}”. Abra a
+                ficha de qualquer jogo no catálogo para atualizar seu status.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                {myShelfByStatus[shelfStatus].map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => onSelectGame(g.id)}
+                    className="flex items-center gap-3 p-2.5 rounded-md bg-[#0C0D0C] border border-[#232823] hover:border-[#4ADE80]/60 transition-colors text-left cursor-pointer"
+                  >
+                    <GameCover
+                      title={g.title}
+                      coverUrl={g.coverUrl}
+                      compact
+                      className="w-10 shrink-0 rounded-[2px]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-[#F2F2EE] truncate">
+                        {g.title}
+                      </p>
+                      <p className="text-[11px] text-[#8C9288] truncate">
+                        {g.developer} · {g.releaseYear}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <div className="space-y-6">
             <h2 className="font-serif text-2xl font-medium text-[#F2F2EE]">
@@ -627,6 +738,20 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
           imageSrc={cropSourceUrl}
           onClose={() => setCropSourceUrl(null)}
           onConfirm={handleConfirmAvatarCrop}
+        />
+      )}
+
+      {showShareTop5 && (profile?.topFiveGames || []).length > 0 && (
+        <ShareCardModal
+          payload={{
+            kind: 'top5',
+            memberName: shownName,
+            bio: profile?.bio,
+            averageScore: myAverageScore,
+            reviewCount: myReviews.length,
+            topFiveGames: profile?.topFiveGames || [],
+          }}
+          onClose={() => setShowShareTop5(false)}
         />
       )}
     </main>

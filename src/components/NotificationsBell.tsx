@@ -160,7 +160,8 @@ export function NotificationsBell({
                 <MessageSquare className="w-5 h-5 text-[#4B5148] mx-auto" />
                 <p className="text-xs text-[#90968C] leading-relaxed">
                   Nenhuma notificação por enquanto. Quando outros membros comentarem
-                  em uma avaliação sua, responderem um comentário seu
+                  em uma avaliação sua, responderem um comentário seu, mencionarem
+                  você com @nome
                   {isAdmin ? ' ou reportarem uma capa incorreta' : ''}, ela aparecerá
                   aqui em tempo real.
                 </p>
@@ -289,15 +290,19 @@ export function NotificationsBell({
                               <span className="font-semibold text-[#F2F2EE]">
                                 {item.authorName}
                               </span>{' '}
-                              {item.isReply
-                                ? 'respondeu ao seu comentário em'
-                                : 'comentou na sua avaliação de'}{' '}
+                              {item.isMention && !item.isReply
+                                ? 'mencionou você em'
+                                : item.isReply
+                                  ? 'respondeu ao seu comentário em'
+                                  : 'comentou na sua avaliação de'}{' '}
                               <span className="font-semibold text-[#F2F2EE]">
                                 {item.gameTitle}
                               </span>
                             </p>
                             <p className="text-xs text-[#8C9288] line-clamp-2 break-words">
-                              “{item.body}”
+                              {item.hasSpoiler
+                                ? '[Comentário marcado com spoiler — abra a ficha para revelar]'
+                                : `“${item.body}”`}
                             </p>
                             <p className="text-[11px] text-[#6E736B]">
                               {formatTimestamp(item.createdAt)}
@@ -405,15 +410,19 @@ export function NotificationsBell({
               <span className="font-semibold text-[#4ADE80]">
                 {latestLiveNotification.authorName}
               </span>{' '}
-              {latestLiveNotification.isReply
-                ? 'respondeu ao seu comentário em'
-                : 'comentou na sua avaliação de'}{' '}
+              {latestLiveNotification.isMention && !latestLiveNotification.isReply
+                ? 'mencionou você em'
+                : latestLiveNotification.isReply
+                  ? 'respondeu ao seu comentário em'
+                  : 'comentou na sua avaliação de'}{' '}
               <span className="font-semibold text-[#F2F2EE]">
                 {latestLiveNotification.gameTitle}
               </span>
             </p>
             <p className="text-xs text-[#8C9288] truncate">
-              “{latestLiveNotification.body}”
+              {latestLiveNotification.hasSpoiler
+                ? '[Comentário com spoiler]'
+                : `“${latestLiveNotification.body}”`}
             </p>
           </button>
           <button

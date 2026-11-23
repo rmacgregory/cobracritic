@@ -10,12 +10,16 @@ import {
 } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import {
+  GAME_PLAY_STATUS_LIST,
+  GAME_PLAY_STATUS_META,
   GENRES,
   PLATFORMS,
   formatReleaseDate,
   getScoreMeta,
+  type GamePlayStatus,
   type GameWithStats,
 } from '../types';
+import { FeaturedRoundBanner } from './FeaturedRoundBanner';
 import { GameCover } from './GameCover';
 import { ScoreBadge } from './ScoreBadge';
 
@@ -52,10 +56,17 @@ export function CatalogView({
   onOpenReview,
   onGoToFeed,
 }: CatalogViewProps) {
-  const { gamesWithStats, reviews, dataLoading, seedStarterGames } = useVeredito();
+  const {
+    gamesWithStats,
+    reviews,
+    dataLoading,
+    myStatusByGame,
+    seedStarterGames,
+  } = useVeredito();
 
   const [search, setSearch] = useState('');
   const [selectedYear, setSelectedYear] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState<'all' | GamePlayStatus>('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [showDateRange, setShowDateRange] = useState(false);
@@ -142,6 +153,10 @@ export function CatalogView({
         return false;
       }
 
+      if (selectedStatus !== 'all' && myStatusByGame[game.id] !== selectedStatus) {
+        return false;
+      }
+
       return true;
     });
 
@@ -180,6 +195,8 @@ export function CatalogView({
     selectedPlatform,
     selectedGenre,
     selectedYear,
+    selectedStatus,
+    myStatusByGame,
     dateFrom,
     dateTo,
     sortBy,
@@ -190,6 +207,7 @@ export function CatalogView({
       selectedPlatform !== 'all' ||
       selectedGenre !== 'all' ||
       selectedYear !== 'all' ||
+      selectedStatus !== 'all' ||
       dateFrom ||
       dateTo,
   );
@@ -199,6 +217,7 @@ export function CatalogView({
     onChangePlatform('all');
     onChangeGenre('all');
     setSelectedYear('all');
+    setSelectedStatus('all');
     setDateFrom('');
     setDateTo('');
   };
@@ -269,6 +288,11 @@ export function CatalogView({
 
   return (
     <main className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-9">
+      <FeaturedRoundBanner
+        onSelectGame={onSelectGame}
+        onOpenReview={onOpenReview}
+      />
+
       {/* Editorial Spotlight Hero (hidden when filtering by sidebar category so results are immediate) */}
       {featuredGame && !hasActiveFilters && (
         <section
@@ -538,18 +562,45 @@ export function CatalogView({
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-            <button
-              type="button"
-              onClick={() => setShowDateRange((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#A8ACA5] hover:text-[#F2F2EE] transition-colors cursor-pointer"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>
-                {showDateRange
-                  ? 'Ocultar intervalo exato de lançamento'
-                  : 'Filtrar por intervalo de data de lançamento'}
-              </span>
-            </button>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <label
+                  htmlFor="filter-my-status"
+                  className="text-xs text-[#8C9288] whitespace-nowrap"
+                >
+                  Meu status:
+                </label>
+                <select
+                  id="filter-my-status"
+                  value={selectedStatus}
+                  onChange={(e) =>
+                    setSelectedStatus(e.target.value as 'all' | GamePlayStatus)
+                  }
+                  aria-label="Filtrar pelo meu status de jogo"
+                  className="px-2.5 py-1.5 text-xs bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
+                >
+                  <option value="all">Todos os status</option>
+                  {GAME_PLAY_STATUS_LIST.map((st) => (
+                    <option key={st} value={st}>
+                      {GAME_PLAY_STATUS_META[st].label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowDateRange((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#A8ACA5] hover:text-[#F2F2EE] transition-colors cursor-pointer"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>
+                  {showDateRange
+                    ? 'Ocultar intervalo de lançamento'
+                    : 'Intervalo de lançamento'}
+                </span>
+              </button>
+            </div>
 
             {hasActiveFilters && (
               <button
@@ -648,6 +699,15 @@ export function CatalogView({
                   <span className="hidden md:inline text-[11px] font-mono text-[#6E736B] tabular-nums shrink-0">
                     {game.releaseYear}
                   </span>
+                  {myStatusByGame[game.id] && (
+                    <span
+                      className={`text-[11px] font-medium shrink-0 ${
+                        GAME_PLAY_STATUS_META[myStatusByGame[game.id]].colorClass
+                      }`}
+                    >
+                      · {GAME_PLAY_STATUS_META[myStatusByGame[game.id]].shortLabel}
+                    </span>
+                  )}
                 </div>
 
                 <p
@@ -712,7 +772,19 @@ export function CatalogView({
 
                     <div className="space-y-0.5 text-[11px] text-[#8C9288]">
                       <p className="truncate">{game.platforms.join(' · ')}</p>
-                      <p className="truncate text-[#6E736B]">{game.genres.join(' / ')}</p>
+                      <p className="truncate text-[#6E736B]">
+                        {game.genres.join(' / ')}
+                        {myStatusByGame[game.id] && (
+                          <span
+                            className={`font-medium ${
+                              GAME_PLAY_STATUS_META[myStatusByGame[game.id]].colorClass
+                            }`}
+                          >
+                            {' · '}
+                            {GAME_PLAY_STATUS_META[myStatusByGame[game.id]].shortLabel}
+                          </span>
+                        )}
+                      </p>
                     </div>
                   </div>
 

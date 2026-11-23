@@ -1,8 +1,17 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowLeft, Check, Flag, Pencil, Trash2, X } from 'lucide-react';
+import { ArrowLeft, Check, Flag, Pencil, Pin, PinOff, Trash2, X } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
-import { LIMITS, formatReleaseDate, type GameWithStats, type Review } from '../types';
+import {
+  GAME_PLAY_STATUS_LIST,
+  GAME_PLAY_STATUS_META,
+  LIMITS,
+  formatReleaseDate,
+  type GamePlayStatus,
+  type GameWithStats,
+  type Review,
+} from '../types';
 import { GameCover } from './GameCover';
+import { MemberAvatar } from './MemberAvatar';
 import { ReviewCard } from './ReviewCard';
 import { ScoreBadge } from './ScoreBadge';
 
@@ -24,9 +33,17 @@ export function GameDetailView({
   const {
     user,
     isAdmin,
+    membersById,
     myOpenCoverReportGameIds,
+    userStatusesByGame,
+    myStatusByGame,
+    featuredRound,
     deleteGame,
     reportIncorrectCover,
+    setGamePlayStatus,
+    clearGamePlayStatus,
+    pinFeaturedRound,
+    unpinFeaturedRound,
   } = useVeredito();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -35,14 +52,64 @@ export function GameDetailView({
   const [submittingCoverReport, setSubmittingCoverReport] = useState(false);
   const [coverReportFeedback, setCoverReportFeedback] = useState<string | null>(null);
   const [coverReportError, setCoverReportError] = useState<string | null>(null);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [showPinForm, setShowPinForm] = useState(false);
+  const [pinRoundLabel, setPinRoundLabel] = useState('Rodada atual');
+  const [pinNote, setPinNote] = useState('');
+  const [pinBusy, setPinBusy] = useState(false);
 
   const alreadyReportedCover = myOpenCoverReportGameIds.has(game.id);
+  const myStatus = myStatusByGame[game.id];
+  const gameStatuses = userStatusesByGame[game.id] || [];
+  const isPinnedAsRound = featuredRound?.gameId === game.id;
 
   const myReview = user
     ? game.reviews.find((r) => r.authorId === user.uid) || null
     : null;
 
   const canManageGame = Boolean(user && (game.createdBy === user.uid || isAdmin));
+
+  const handleTogglePlayStatus = async (status: GamePlayStatus) => {
+    if (statusBusy) return;
+    setStatusBusy(true);
+    try {
+      if (myStatus === status) {
+        await clearGamePlayStatus(game.id);
+      } else {
+        await setGamePlayStatus(game.id, status);
+      }
+    } finally {
+      setStatusBusy(false);
+    }
+  };
+
+  const handlePinFeaturedRound = async (e: FormEvent) => {
+    e.preventDefault();
+    if (pinBusy) return;
+    setPinBusy(true);
+    try {
+      await pinFeaturedRound({
+        gameId: game.id,
+        title: game.title,
+        coverUrl: game.coverUrl,
+        roundLabel: pinRoundLabel.trim() || 'Rodada atual',
+        note: pinNote.trim(),
+      });
+      setShowPinForm(false);
+    } finally {
+      setPinBusy(false);
+    }
+  };
+
+  const handleUnpinFeaturedRound = async () => {
+    if (pinBusy) return;
+    setPinBusy(true);
+    try {
+      await unpinFeaturedRound();
+    } finally {
+      setPinBusy(false);
+    }
+  };
 
   const handleDeleteGame = async () => {
     setDeleting(true);
@@ -87,49 +154,133 @@ export function GameDetailView({
           <span>Voltar ao catálogo</span>
         </button>
 
-        {canManageGame && (
-          <div className="flex items-center gap-4">
-            <button
-              type="button"
-              onClick={() => onEditGame(game)}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#A8ACA5] hover:text-[#F2F2EE] transition-colors cursor-pointer"
-            >
-              <Pencil className="w-3.5 h-3.5" />
-              <span>Editar ficha</span>
-            </button>
-
-            {confirmingDelete ? (
-              <div className="inline-flex items-center gap-2 text-xs">
-                <span className="text-[#F87171] font-medium">Confirmar exclusão?</span>
-                <button
-                  type="button"
-                  onClick={handleDeleteGame}
-                  disabled={deleting}
-                  className="px-2.5 py-1 bg-[#B91C1C] text-white rounded-md font-medium cursor-pointer"
-                >
-                  {deleting ? 'Removendo...' : 'Sim, excluir'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(false)}
-                  className="text-[#8C9288] hover:text-[#F2F2EE] cursor-pointer"
-                >
-                  Cancelar
-                </button>
-              </div>
+        <div className="flex flex-wrap items-center gap-4">
+          {isAdmin && (
+            isPinnedAsRound ? (
+              <button
+                type="button"
+                disabled={pinBusy}
+                onClick={handleUnpinFeaturedRound}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4ADE80] hover:text-[#F87171] transition-colors cursor-pointer"
+              >
+                <PinOff className="w-3.5 h-3.5" />
+                <span>Jogo da Rodada fixado · Desafixar</span>
+              </button>
             ) : (
               <button
                 type="button"
-                onClick={() => setConfirmingDelete(true)}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#8C9288] hover:text-[#F87171] transition-colors cursor-pointer"
+                onClick={() => setShowPinForm((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#A8ACA5] hover:text-[#4ADE80] transition-colors cursor-pointer"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Remover jogo</span>
+                <Pin className="w-3.5 h-3.5" />
+                <span>Fixar como Jogo da Rodada</span>
               </button>
-            )}
-          </div>
-        )}
+            )
+          )}
+
+          {canManageGame && (
+            <>
+              <button
+                type="button"
+                onClick={() => onEditGame(game)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-[#A8ACA5] hover:text-[#F2F2EE] transition-colors cursor-pointer"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Editar ficha</span>
+              </button>
+
+              {confirmingDelete ? (
+                <div className="inline-flex items-center gap-2 text-xs">
+                  <span className="text-[#F87171] font-medium">Confirmar exclusão?</span>
+                  <button
+                    type="button"
+                    onClick={handleDeleteGame}
+                    disabled={deleting}
+                    className="px-2.5 py-1 bg-[#B91C1C] text-white rounded-md font-medium cursor-pointer"
+                  >
+                    {deleting ? 'Removendo...' : 'Sim, excluir'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(false)}
+                    className="text-[#8C9288] hover:text-[#F2F2EE] cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#8C9288] hover:text-[#F87171] transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Remover jogo</span>
+                </button>
+              )}
+            </>
+          )}
+        </div>
       </div>
+
+      {isAdmin && showPinForm && !isPinnedAsRound && (
+        <form
+          onSubmit={handlePinFeaturedRound}
+          className="bg-[#131914] border border-[#244D32] rounded-md p-4 flex flex-col sm:flex-row sm:items-end gap-3"
+        >
+          <div className="flex-1 min-w-[180px]">
+            <label
+              htmlFor="pin-round-label"
+              className="block text-[11px] font-medium text-[#A8ACA5] mb-1"
+            >
+              Rótulo da rodada
+            </label>
+            <input
+              id="pin-round-label"
+              type="text"
+              maxLength={LIMITS.FEATURED_ROUND_LABEL_MAX}
+              value={pinRoundLabel}
+              onChange={(e) => setPinRoundLabel(e.target.value)}
+              placeholder="Ex.: Rodada de Maio · Votação do Grupo"
+              className="w-full px-3 py-2 text-xs bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
+            />
+          </div>
+          <div className="flex-1 min-w-[200px]">
+            <label
+              htmlFor="pin-round-note"
+              className="block text-[11px] font-medium text-[#A8ACA5] mb-1"
+            >
+              Observação opcional
+            </label>
+            <input
+              id="pin-round-note"
+              type="text"
+              maxLength={LIMITS.FEATURED_ROUND_NOTE_MAX}
+              value={pinNote}
+              onChange={(e) => setPinNote(e.target.value)}
+              placeholder="Ex.: Meta de zerar até domingo para o bate-papo!"
+              className="w-full px-3 py-2 text-xs bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
+            />
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowPinForm(false)}
+              className="px-3 py-2 text-xs text-[#8C9288] hover:text-[#F2F2EE] cursor-pointer"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={pinBusy}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-[#4ADE80] text-[#0C0D0C] rounded-md hover:bg-[#6EE79E] disabled:opacity-50 cursor-pointer"
+            >
+              <Pin className="w-3.5 h-3.5" />
+              <span>{pinBusy ? 'Fixando...' : 'Fixar no topo'}</span>
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Editorial Game Dossier */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 pb-12 border-b border-[#232723]">
@@ -346,6 +497,99 @@ export function GameDetailView({
                 </div>
               </div>
             )}
+
+            {/* Personal Play Status Selector & Group Activity */}
+            <div className="space-y-4 pt-4 border-t border-[#222622]">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-[#A8ACA5]">
+                    Meu status neste jogo
+                  </span>
+                  {myStatus && (
+                    <button
+                      type="button"
+                      disabled={statusBusy}
+                      onClick={() => handleTogglePlayStatus(myStatus)}
+                      className="text-[11px] text-[#8C9288] hover:text-[#F87171] cursor-pointer"
+                    >
+                      Limpar status
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  {GAME_PLAY_STATUS_LIST.map((st) => {
+                    const meta = GAME_PLAY_STATUS_META[st];
+                    const active = myStatus === st;
+                    return (
+                      <button
+                        key={st}
+                        type="button"
+                        disabled={statusBusy}
+                        onClick={() => handleTogglePlayStatus(st)}
+                        aria-pressed={active}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-md border transition-colors cursor-pointer ${
+                          active
+                            ? meta.activeClass
+                            : 'bg-[#0C0D0C] border-[#262B26] text-[#90968C] hover:text-[#F2F2EE] hover:border-[#3A433A]'
+                        }`}
+                      >
+                        {meta.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {gameStatuses.length > 0 && (
+                <div className="space-y-2.5 pt-2 border-t border-[#1E221E]">
+                  <p className="text-xs font-medium text-[#8C9288]">
+                    Atividade dos Cobras ({gameStatuses.length})
+                  </p>
+                  <div className="space-y-2">
+                    {GAME_PLAY_STATUS_LIST.map((st) => {
+                      const entries = gameStatuses.filter((item) => item.status === st);
+                      if (entries.length === 0) return null;
+                      const meta = GAME_PLAY_STATUS_META[st];
+                      return (
+                        <div
+                          key={st}
+                          className="flex flex-wrap items-center gap-2 text-xs"
+                        >
+                          <span className={`font-medium w-24 shrink-0 ${meta.colorClass}`}>
+                            {meta.label} ({entries.length})
+                          </span>
+                          <div className="flex flex-wrap items-center gap-2">
+                            {entries.map((entry) => {
+                              const liveMember = membersById[entry.userId];
+                              const name = liveMember?.displayName || entry.userName;
+                              return (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  onClick={() => onSelectAuthor(entry.userId)}
+                                  className="inline-flex items-center gap-1.5 px-2 py-1 rounded bg-[#0C0D0C] border border-[#232823] text-[#C8CBC4] hover:border-[#4ADE80]/60 hover:text-[#F2F2EE] transition-colors cursor-pointer"
+                                >
+                                  <MemberAvatar
+                                    name={name}
+                                    primarySrc={liveMember?.photoURL || ''}
+                                    fallbackSrc={entry.userPhotoURL}
+                                    size="xs"
+                                  />
+                                  <span className="max-w-[120px] truncate">
+                                    {name.split(' ')[0]}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </section>

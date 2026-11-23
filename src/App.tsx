@@ -12,6 +12,7 @@ import { MembersView } from './components/MembersView';
 import { NotificationsBell } from './components/NotificationsBell';
 import { ProfileView } from './components/ProfileView';
 import { RankingView } from './components/RankingView';
+import { RetrospectiveView } from './components/RetrospectiveView';
 import { ReviewFormModal } from './components/ReviewFormModal';
 import { Sidebar } from './components/Sidebar';
 import { SocialFeedView } from './components/SocialFeedView';
@@ -262,6 +263,7 @@ function CobraCriticShell() {
     feed: 'Feed Social',
     events: 'Eventos',
     ranking: 'Ranking',
+    retrospective: 'Retrospectiva',
     members: 'Membros',
     profile: 'Meu Perfil',
     admin: 'Painel Admin',
@@ -425,6 +427,11 @@ function CobraCriticShell() {
             />
           ) : effectiveTab === 'ranking' ? (
             <RankingView
+              onSelectGame={handleSelectGame}
+              onSelectMember={(uid) => handleSelectMember(uid)}
+            />
+          ) : effectiveTab === 'retrospective' ? (
+            <RetrospectiveView
               onSelectGame={handleSelectGame}
               onSelectMember={(uid) => handleSelectMember(uid)}
             />

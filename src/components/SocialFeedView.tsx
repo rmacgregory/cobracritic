@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import { formatTimestamp, type GameWithStats, type Review } from '../types';
+import { FeaturedRoundBanner } from './FeaturedRoundBanner';
 import { ReviewCard } from './ReviewCard';
 
 interface SocialFeedViewProps {
@@ -84,6 +85,8 @@ export function SocialFeedView({
           diretamente nas críticas dos amigos.
         </p>
       </div>
+
+      <FeaturedRoundBanner onSelectGame={onSelectGame} />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Main Review Stream */}
@@ -253,7 +256,9 @@ export function SocialFeedView({
                         </button>
                       </p>
                       <p className="text-xs text-[#C8CBC4] line-clamp-2 leading-relaxed">
-                        “{cmt.body}”
+                        {cmt.hasSpoiler
+                          ? '[Comentário marcado com spoiler]'
+                          : `“${cmt.body}”`}
                       </p>
                       <p className="text-[11px] text-[#787D75]">
                         {formatTimestamp(cmt.createdAt)}
