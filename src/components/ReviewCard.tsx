@@ -9,6 +9,7 @@ import {
   type Review,
 } from '../types';
 import { GameCover } from './GameCover';
+import { MemberAvatar } from './MemberAvatar';
 import { ScoreBadge } from './ScoreBadge';
 
 interface ReviewCardProps {
@@ -60,15 +61,11 @@ export function ReviewCard({
   const displayCover = game?.coverUrl ?? review.gameCoverUrl;
   const liveAuthor = membersById[review.authorId];
   const resolvedAuthorName = liveAuthor?.displayName || review.authorName;
-  const resolvedAuthorPhoto = liveAuthor?.photoURL || review.authorPhotoURL;
+  const resolvedAuthorPrimaryPhoto =
+    liveAuthor?.photoURL ||
+    (review.authorId === user?.uid ? user?.photoURL || '' : '');
+  const resolvedAuthorFallbackPhoto = review.authorPhotoURL || '';
   const scoreMeta = getScoreMeta(review.score);
-
-  const initials = resolvedAuthorName
-    .split(' ')
-    .slice(0, 2)
-    .map((p) => p[0])
-    .join('')
-    .toUpperCase();
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,18 +125,12 @@ export function ReviewCard({
       {/* Reviewer header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-3 min-w-0">
-          {resolvedAuthorPhoto ? (
-            <img
-              src={resolvedAuthorPhoto}
-              alt={resolvedAuthorName}
-              referrerPolicy="no-referrer"
-              className="w-9 h-9 rounded-full object-cover border border-[#2C312C] shrink-0"
-            />
-          ) : (
-            <div className="w-9 h-9 rounded-full bg-[#222622] text-[#F2F2EE] text-xs font-semibold flex items-center justify-center shrink-0">
-              {initials}
-            </div>
-          )}
+          <MemberAvatar
+            name={resolvedAuthorName}
+            primarySrc={resolvedAuthorPrimaryPhoto}
+            fallbackSrc={resolvedAuthorFallbackPhoto}
+            size="md"
+          />
           <div className="min-w-0">
             <div className="flex items-center gap-2 min-w-0">
               {onSelectAuthor ? (
@@ -297,27 +288,18 @@ export function ReviewCard({
                 const liveCommenter = membersById[comment.authorId];
                 const commentAuthorName =
                   liveCommenter?.displayName || comment.authorName;
-                const commentAuthorPhoto =
-                  liveCommenter?.photoURL || comment.authorPhotoURL;
-                const commentInitials = commentAuthorName
-                  .split(' ')
-                  .filter(Boolean)
-                  .slice(0, 2)
-                  .map((p) => p[0])
-                  .join('')
-                  .toUpperCase();
+                const commentPrimaryPhoto =
+                  liveCommenter?.photoURL ||
+                  (comment.authorId === user?.uid ? user?.photoURL || '' : '');
+                const commentFallbackPhoto = comment.authorPhotoURL || '';
 
-                const avatarNode = commentAuthorPhoto ? (
-                  <img
-                    src={commentAuthorPhoto}
-                    alt={commentAuthorName}
-                    referrerPolicy="no-referrer"
-                    className="w-6 h-6 rounded-full object-cover border border-[#2C312C] shrink-0"
+                const avatarNode = (
+                  <MemberAvatar
+                    name={commentAuthorName}
+                    primarySrc={commentPrimaryPhoto}
+                    fallbackSrc={commentFallbackPhoto}
+                    size="xs"
                   />
-                ) : (
-                  <div className="w-6 h-6 rounded-full bg-[#222622] border border-[#2C312C] text-[#F2F2EE] text-[10px] font-semibold flex items-center justify-center shrink-0">
-                    {commentInitials || '?'}
-                  </div>
                 );
 
                 return (

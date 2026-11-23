@@ -1,4 +1,12 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -55,6 +63,58 @@ function getTimeMillis(ts?: { toMillis?: () => number } | null): number {
   return ts.toMillis();
 }
 
+export interface CommentNotification {
+  id: string;
+  reviewId: string;
+  gameId: string;
+  gameTitle: string;
+  authorId: string;
+  authorName: string;
+  authorPhotoURL: string;
+  authorFallbackPhotoURL: string;
+  body: string;
+  createdAt?: ReviewComment['createdAt'];
+  unread: boolean;
+}
+
+interface NotificationReadState {
+  readIds: string[];
+  readAllBeforeMs: number;
+}
+
+const NOTIF_STORAGE_PREFIX = 'cobracritic_notif_read_v1_';
+
+function loadNotificationReadState(uid: string): NotificationReadState {
+  try {
+    const raw = window.localStorage.getItem(`${NOTIF_STORAGE_PREFIX}${uid}`);
+    if (!raw) return { readIds: [], readAllBeforeMs: 0 };
+    const parsed = JSON.parse(raw) as Partial<NotificationReadState>;
+    return {
+      readIds: Array.isArray(parsed.readIds)
+        ? parsed.readIds.filter((id): id is string => typeof id === 'string').slice(-300)
+        : [],
+      readAllBeforeMs:
+        typeof parsed.readAllBeforeMs === 'number' ? parsed.readAllBeforeMs : 0,
+    };
+  } catch {
+    return { readIds: [], readAllBeforeMs: 0 };
+  }
+}
+
+function saveNotificationReadState(uid: string, state: NotificationReadState) {
+  try {
+    window.localStorage.setItem(
+      `${NOTIF_STORAGE_PREFIX}${uid}`,
+      JSON.stringify({
+        readIds: state.readIds.slice(-300),
+        readAllBeforeMs: state.readAllBeforeMs,
+      }),
+    );
+  } catch {
+    // ignore storage errors
+  }
+}
+
 interface VereditoContextValue {
   user: User | null;
   authReady: boolean;
@@ -81,6 +141,12 @@ interface VereditoContextValue {
   reactions: ReviewReaction[];
   commentsByReview: Record<string, ReviewComment[]>;
   reactionsByReview: Record<string, ReviewReaction[]>;
+  commentNotifications: CommentNotification[];
+  unreadNotificationCount: number;
+  latestLiveNotification: CommentNotification | null;
+  markNotificationRead: (commentId: string) => void;
+  markAllNotificationsRead: () => void;
+  dismissLiveNotification: () => void;
   signInWithGoogle: () => Promise<void>;
   signInWithAdminCredentials: (usernameOrEmail: string, password: string) => Promise<void>;
   signOutUser: () => Promise<void>;
@@ -124,6 +190,14 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [comments, setComments] = useState<ReviewComment[]>([]);
   const [reactions, setReactions] = useState<ReviewReaction[]>([]);
+  const [notifReadState, setNotifReadState] = useState<NotificationReadState>({
+    readIds: [],
+    readAllBeforeMs: 0,
+  });
+  const [liveNotifId, setLiveNotifId] = useState<string | null>(null);
+  const seenCommentIdsRef = useRef<Set<string>>(new Set());
+  const commentsInitializedRef = useRef(false);
+  const myReviewIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
@@ -163,6 +237,22 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
               }
               throw writeErr;
             }
+          } else {
+            const existingData = snap.data() as Partial<UserProfile> | undefined;
+            const authPhoto = sanitizeAvatarUrl(nextUser.photoURL);
+            if (!existingData?.photoURL && authPhoto) {
+              try {
+                await updateDoc(userRef, {
+                  photoURL: authPhoto,
+                  topFiveGames: Array.isArray(existingData?.topFiveGames)
+                    ? existingData.topFiveGames
+                    : [],
+                  updatedAt: serverTimestamp(),
+                });
+              } catch {
+                // ignore backfill errors for non-verified accounts
+              }
+            }
           }
         } catch (error) {
           handleFirestoreError(error, OperationType.WRITE, `users/${nextUser.uid}`);
@@ -175,6 +265,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         setReviews([]);
         setComments([]);
         setReactions([]);
+        setLiveNotifId(null);
+        seenCommentIdsRef.current = new Set();
+        commentsInitializedRef.current = false;
       }
     });
 
@@ -199,7 +292,13 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const unsubUsers = onSnapshot(
       query(collection(db, 'users'), where('visibility', '==', 'group')),
       (snap) => {
-        const list = snap.docs.map((d) => d.data() as UserProfile);
+        const list = snap.docs.map((d) => {
+          const data = d.data() as Partial<UserProfile>;
+          return {
+            ...(data as UserProfile),
+            uid: data.uid || d.id,
+          };
+        });
         list.sort((a, b) => a.displayName.localeCompare(b.displayName, 'pt-BR'));
         setMembers(list);
       },
@@ -254,6 +353,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       (err) => handleFirestoreError(err, OperationType.LIST, 'reviews'),
     );
 
+    commentsInitializedRef.current = false;
+    seenCommentIdsRef.current = new Set();
+
     const unsubComments = onSnapshot(
       query(collection(db, 'comments'), where('visibility', '==', 'group')),
       (snap) => {
@@ -262,6 +364,28 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           ...(d.data() as Omit<ReviewComment, 'id'>),
         }));
         list.sort((a, b) => getTimeMillis(a.createdAt) - getTimeMillis(b.createdAt));
+
+        if (!commentsInitializedRef.current) {
+          seenCommentIdsRef.current = new Set(list.map((c) => c.id));
+          commentsInitializedRef.current = true;
+        } else {
+          for (const change of snap.docChanges()) {
+            if (change.type === 'added') {
+              const docId = change.doc.id;
+              if (!seenCommentIdsRef.current.has(docId)) {
+                seenCommentIdsRef.current.add(docId);
+                const data = change.doc.data() as Omit<ReviewComment, 'id'>;
+                if (
+                  data.authorId !== user.uid &&
+                  myReviewIdsRef.current.has(data.reviewId)
+                ) {
+                  setLiveNotifId(docId);
+                }
+              }
+            }
+          }
+        }
+
         setComments(list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'comments'),
@@ -412,6 +536,119 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     }
     return map;
   }, [reactions]);
+
+  useEffect(() => {
+    if (!user) {
+      setNotifReadState({ readIds: [], readAllBeforeMs: 0 });
+      return;
+    }
+    setNotifReadState(loadNotificationReadState(user.uid));
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      myReviewIdsRef.current = new Set();
+      return;
+    }
+    myReviewIdsRef.current = new Set(
+      reviews.filter((r) => r.authorId === user.uid).map((r) => r.id),
+    );
+  }, [reviews, user]);
+
+  const commentNotifications = useMemo<CommentNotification[]>(() => {
+    if (!user) return [];
+    const myReviewsById = new Map<string, Review>();
+    for (const r of reviews) {
+      if (r.authorId === user.uid) {
+        myReviewsById.set(r.id, r);
+      }
+    }
+    if (myReviewsById.size === 0) return [];
+
+    const gamesById = new Map<string, Game>();
+    for (const g of games) {
+      gamesById.set(g.id, g);
+    }
+
+    const readIdSet = new Set(notifReadState.readIds);
+
+    return comments
+      .filter((c) => c.authorId !== user.uid && myReviewsById.has(c.reviewId))
+      .sort((a, b) => getTimeMillis(b.createdAt) - getTimeMillis(a.createdAt))
+      .map((c) => {
+        const targetReview = myReviewsById.get(c.reviewId);
+        const liveAuthor = membersById[c.authorId];
+        const createdMs = getTimeMillis(c.createdAt);
+        const unread =
+          !readIdSet.has(c.id) && createdMs > notifReadState.readAllBeforeMs;
+
+        return {
+          id: c.id,
+          reviewId: c.reviewId,
+          gameId: c.gameId,
+          gameTitle:
+            gamesById.get(c.gameId)?.title || targetReview?.gameTitle || 'Jogo',
+          authorId: c.authorId,
+          authorName: liveAuthor?.displayName || c.authorName,
+          authorPhotoURL: liveAuthor?.photoURL || '',
+          authorFallbackPhotoURL: c.authorPhotoURL || '',
+          body: c.body,
+          createdAt: c.createdAt,
+          unread,
+        };
+      });
+  }, [user, reviews, games, comments, membersById, notifReadState]);
+
+  const unreadNotificationCount = useMemo(
+    () => commentNotifications.filter((n) => n.unread).length,
+    [commentNotifications],
+  );
+
+  const latestLiveNotification = useMemo(() => {
+    if (!liveNotifId) return null;
+    return commentNotifications.find((n) => n.id === liveNotifId) || null;
+  }, [commentNotifications, liveNotifId]);
+
+  useEffect(() => {
+    if (!liveNotifId) return;
+    const timer = window.setTimeout(() => setLiveNotifId(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [liveNotifId]);
+
+  const markNotificationRead = useCallback(
+    (commentId: string) => {
+      if (!user) return;
+      setNotifReadState((prev) => {
+        if (prev.readIds.includes(commentId)) return prev;
+        const next: NotificationReadState = {
+          ...prev,
+          readIds: [...prev.readIds, commentId].slice(-300),
+        };
+        saveNotificationReadState(user.uid, next);
+        return next;
+      });
+    },
+    [user],
+  );
+
+  const markAllNotificationsRead = useCallback(() => {
+    if (!user) return;
+    const allIds = commentNotifications.map((n) => n.id);
+    setNotifReadState((prev) => {
+      const mergedIds = Array.from(new Set([...prev.readIds, ...allIds])).slice(-300);
+      const next: NotificationReadState = {
+        readIds: mergedIds,
+        readAllBeforeMs: Date.now(),
+      };
+      saveNotificationReadState(user.uid, next);
+      return next;
+    });
+    setLiveNotifId(null);
+  }, [user, commentNotifications]);
+
+  const dismissLiveNotification = useCallback(() => {
+    setLiveNotifId(null);
+  }, []);
 
   const signInWithGoogle = async () => {
     setAuthError(null);
@@ -648,7 +885,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       Math.max(0, Number(input.hoursPlayed) || 0),
     );
     const authorName = getCurrentDisplayName();
-    const authorPhotoURL = sanitizeOptionalUrl(user.photoURL);
+    const authorPhotoURL =
+      sanitizeOptionalUrl(profile?.photoURL) || sanitizeOptionalUrl(user.photoURL);
     const cleanHeadline = input.headline.trim().slice(0, LIMITS.HEADLINE_MAX);
     const cleanBody = input.body.trim().slice(0, LIMITS.REVIEW_BODY_MAX);
     const cleanPlatform = input.platformPlayed.trim().slice(0, 40) || game.platforms[0] || 'PC';
@@ -722,7 +960,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         gameId,
         authorId: user.uid,
         authorName: getCurrentDisplayName(),
-        authorPhotoURL: sanitizeOptionalUrl(user.photoURL),
+        authorPhotoURL:
+          sanitizeOptionalUrl(profile?.photoURL) || sanitizeOptionalUrl(user.photoURL),
         body: cleanBody,
         visibility: 'group' as const,
         createdAt: serverTimestamp(),
@@ -902,6 +1141,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         reactions,
         commentsByReview,
         reactionsByReview,
+        commentNotifications,
+        unreadNotificationCount,
+        latestLiveNotification,
+        markNotificationRead,
+        markAllNotificationsRead,
+        dismissLiveNotification,
         signInWithGoogle,
         signInWithAdminCredentials,
         signOutUser,

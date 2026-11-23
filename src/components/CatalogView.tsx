@@ -269,13 +269,14 @@ export function CatalogView({
               <button
                 type="button"
                 onClick={() => onSelectGame(featuredGame.id)}
-                className="block w-full text-left group cursor-pointer"
+                className="block w-full text-left group cursor-pointer transition-transform duration-300 ease-out hover:scale-[1.02] will-change-transform motion-reduce:transform-none"
               >
                 <GameCover
                   title={featuredGame.title}
                   developer={featuredGame.developer}
                   releaseYear={featuredGame.releaseYear}
                   coverUrl={featuredGame.coverUrl}
+                  className="transition-all duration-300 ease-out group-hover:border-[#3A433A] group-hover:shadow-[0_12px_28px_-14px_rgba(0,0,0,0.85)]"
                 />
               </button>
             </div>
@@ -663,7 +664,7 @@ export function CatalogView({
               return (
                 <article
                   key={game.id}
-                  className="group flex flex-col justify-between space-y-2.5"
+                  className="group flex flex-col justify-between space-y-2.5 transition-transform duration-300 ease-out hover:scale-[1.03] will-change-transform motion-reduce:transform-none"
                 >
                   <div className="space-y-2">
                     <button
@@ -677,6 +678,7 @@ export function CatalogView({
                         releaseYear={game.releaseYear}
                         coverUrl={game.coverUrl}
                         compact
+                        className="transition-all duration-300 ease-out group-hover:border-[#3A433A] group-hover:shadow-[0_12px_28px_-14px_rgba(0,0,0,0.85)]"
                       />
                     </button>
 

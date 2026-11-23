@@ -8,6 +8,7 @@ import { GameDetailView } from './components/GameDetailView';
 import { GameFormModal } from './components/GameFormModal';
 import { GlobalSearchBar } from './components/GlobalSearchBar';
 import { MembersView } from './components/MembersView';
+import { NotificationsBell } from './components/NotificationsBell';
 import { ProfileView } from './components/ProfileView';
 import { RankingView } from './components/RankingView';
 import { ReviewFormModal } from './components/ReviewFormModal';
@@ -331,15 +332,19 @@ function CobraCriticShell() {
             onSelectMember={(uid) => handleSelectMember(uid)}
           />
 
-          <button
-            type="button"
-            onClick={handleOpenNewGame}
-            className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Cadastrar jogo</span>
-            <span className="sm:hidden">Novo</span>
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <NotificationsBell onSelectGame={handleSelectGame} />
+
+            <button
+              type="button"
+              onClick={handleOpenNewGame}
+              className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-2 text-xs sm:text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Cadastrar jogo</span>
+              <span className="sm:hidden">Novo</span>
+            </button>
+          </div>
         </header>
 
         <div className="flex-1">
