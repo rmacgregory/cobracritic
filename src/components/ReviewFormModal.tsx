@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { EyeOff, Trash2, X } from 'lucide-react';
+import { Award, Ban, CheckCircle2, EyeOff, Gamepad2, Trash2, X } from 'lucide-react';
 import {
+  GAME_PLAY_STATUS_META,
+  GAME_PROGRESS_STATUS_LIST,
   LIMITS,
   PLATFORMS,
   getScoreMeta,
   type Game,
+  type GamePlayStatus,
+  type GameProgressStatus,
   type Review,
   type ReviewInput,
 } from '../types';
@@ -13,14 +17,23 @@ import { ScoreBadge } from './ScoreBadge';
 interface ReviewFormModalProps {
   game: Game;
   existingReview?: Review | null;
+  initialPlayStatus?: GamePlayStatus | null;
   onClose: () => void;
   onSubmit: (input: ReviewInput) => Promise<void>;
   onDelete?: () => Promise<void>;
 }
 
+const PROGRESS_STATUS_ICONS: Record<GameProgressStatus, typeof Gamepad2> = {
+  playing: Gamepad2,
+  completed: CheckCircle2,
+  platinum: Award,
+  dropped: Ban,
+};
+
 export function ReviewFormModal({
   game,
   existingReview,
+  initialPlayStatus,
   onClose,
   onSubmit,
   onDelete,
@@ -37,6 +50,9 @@ export function ReviewFormModal({
   );
   const [hasSpoiler, setHasSpoiler] = useState<boolean>(
     Boolean(existingReview?.hasSpoiler),
+  );
+  const [playStatus, setPlayStatus] = useState<GameProgressStatus | null>(
+    initialPlayStatus && initialPlayStatus !== 'wishlist' ? initialPlayStatus : null,
   );
   const [headline, setHeadline] = useState(existingReview?.headline || '');
   const [body, setBody] = useState(existingReview?.body || '');
@@ -94,6 +110,7 @@ export function ReviewFormModal({
         body: ratingOnly ? '' : body.trim(),
         platformPlayed,
         hoursPlayed: parsedHours,
+        playStatus,
       });
       onClose();
     } catch (err) {
@@ -228,6 +245,50 @@ export function ReviewFormModal({
                 className="w-full px-3.5 py-2.5 text-sm bg-[#0C0D0C] border border-[#2C312C] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] font-mono tabular-nums focus:outline-none focus:border-[#4ADE80]"
               />
             </div>
+          </div>
+
+          {/* Play Progress Status Picker */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-[#A8ACA5]">
+                Seu progresso no jogo (opcional)
+              </span>
+              {playStatus && (
+                <button
+                  type="button"
+                  onClick={() => setPlayStatus(null)}
+                  className="text-[11px] text-[#8C9288] hover:text-[#F87171] transition-colors cursor-pointer"
+                >
+                  Limpar status
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {GAME_PROGRESS_STATUS_LIST.map((st) => {
+                const meta = GAME_PLAY_STATUS_META[st];
+                const Icon = PROGRESS_STATUS_ICONS[st];
+                const active = playStatus === st;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setPlayStatus(active ? null : st)}
+                    aria-pressed={active}
+                    className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border transition-colors cursor-pointer ${
+                      active
+                        ? meta.activeClass
+                        : 'bg-[#0C0D0C] border-[#262B26] text-[#90968C] hover:text-[#F2F2EE] hover:border-[#3A433A]'
+                    }`}
+                  >
+                    <Icon className="w-3.5 h-3.5 shrink-0" />
+                    <span>{meta.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-[#787D75]">
+              O status escolhido aparece junto à sua avaliação e atualiza automaticamente sua estante.
+            </p>
           </div>
 
           {/* Option: Rating Only */}

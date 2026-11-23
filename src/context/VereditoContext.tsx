@@ -1645,6 +1645,15 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           updatedAt: serverTimestamp(),
         });
       }
+      if (input.playStatus) {
+        await setGamePlayStatus(game.id, input.playStatus);
+      } else if (
+        input.playStatus === null &&
+        myStatusByGame[game.id] &&
+        myStatusByGame[game.id] !== 'wishlist'
+      ) {
+        await clearGamePlayStatus(game.id);
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
     }

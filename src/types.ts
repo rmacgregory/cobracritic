@@ -325,12 +325,21 @@ export interface EventNomination {
 
 export type GamePlayStatus = 'playing' | 'completed' | 'platinum' | 'wishlist' | 'dropped';
 
+export type GameProgressStatus = Exclude<GamePlayStatus, 'wishlist'>;
+
+export const GAME_PROGRESS_STATUS_LIST: readonly GameProgressStatus[] = [
+  'playing',
+  'completed',
+  'platinum',
+  'dropped',
+] as const;
+
 export const GAME_PLAY_STATUS_LIST: readonly GamePlayStatus[] = [
   'playing',
   'completed',
   'platinum',
-  'wishlist',
   'dropped',
+  'wishlist',
 ] as const;
 
 export const GAME_PLAY_STATUS_META: Record<
@@ -362,8 +371,8 @@ export const GAME_PLAY_STATUS_META: Record<
     activeClass: 'bg-[#20162B] border-[#533378] text-[#D8B4FE]',
   },
   dropped: {
-    label: 'Dropado',
-    shortLabel: 'Dropado',
+    label: 'Langado',
+    shortLabel: 'Langado',
     colorClass: 'text-[#F87171]',
     activeClass: 'bg-[#261414] border-[#5B2727] text-[#FCA5A5]',
   },
@@ -443,6 +452,7 @@ export interface ReviewInput {
   body: string;
   platformPlayed: string;
   hoursPlayed: number;
+  playStatus?: GameProgressStatus | null;
 }
 
 export interface ScoreMeta {

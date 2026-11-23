@@ -245,11 +245,7 @@ export function Sidebar({
     isAdmin,
     isMasterAdmin,
     gamesWithStats,
-    reviews,
     events,
-    openCoverReports,
-    members,
-    bans,
     signOutUser,
   } = useVeredito();
 
@@ -295,8 +291,8 @@ export function Sidebar({
     count?: number;
   }[] = [
     { id: 'home', label: 'Início', icon: Home },
-    { id: 'catalog', label: 'Catálogo', icon: LayoutGrid, count: gamesWithStats.length },
-    { id: 'feed', label: 'Feed Social', icon: MessageSquareText, count: reviews.length },
+    { id: 'catalog', label: 'Catálogo', icon: LayoutGrid },
+    { id: 'feed', label: 'Feed Social', icon: MessageSquareText },
     {
       id: 'events',
       label: 'Eventos',
@@ -305,7 +301,7 @@ export function Sidebar({
     },
     { id: 'ranking', label: 'Ranking', icon: Award },
     { id: 'retrospective', label: 'Retrospectiva', icon: CalendarRange },
-    { id: 'members', label: 'Membros', icon: Users, count: members.length },
+    { id: 'members', label: 'Membros', icon: Users },
     { id: 'profile', label: 'Meu Perfil', icon: User },
     ...(isAdmin
       ? [
@@ -313,10 +309,6 @@ export function Sidebar({
             id: 'admin' as const,
             label: 'Painel Admin',
             icon: Shield,
-            count:
-              bans.length + openCoverReports.length > 0
-                ? bans.length + openCoverReports.length
-                : undefined,
           },
         ]
       : []),

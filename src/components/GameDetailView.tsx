@@ -1,9 +1,20 @@
 import { useState, type FormEvent } from 'react';
-import { ArrowLeft, Check, Flag, Pencil, Pin, PinOff, Trash2, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bookmark,
+  Check,
+  Flag,
+  Pencil,
+  Pin,
+  PinOff,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import {
   GAME_PLAY_STATUS_LIST,
   GAME_PLAY_STATUS_META,
+  GAME_PROGRESS_STATUS_LIST,
   LIMITS,
   formatReleaseDate,
   type GamePlayStatus,
@@ -443,13 +454,40 @@ export function GameDetailView({
                 reviewCount={game.reviewCount}
               />
 
-              <button
-                type="button"
-                onClick={() => onOpenReview(game, myReview)}
-                className="px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                {myReview ? 'Editar minha avaliação' : 'Avaliar jogo'}
-              </button>
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                <button
+                  type="button"
+                  disabled={statusBusy}
+                  onClick={() => handleTogglePlayStatus('wishlist')}
+                  aria-pressed={myStatus === 'wishlist'}
+                  title={
+                    myStatus === 'wishlist'
+                      ? 'Remover da sua lista Quero jogar'
+                      : 'Salvar na sua lista Quero jogar'
+                  }
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-medium rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                    myStatus === 'wishlist'
+                      ? 'bg-[#20162B] border-[#6D44A3] text-[#E9D5FF] hover:bg-[#281B36]'
+                      : 'bg-[#0C0D0C] border-[#2E342E] text-[#C8CBC4] hover:border-[#C084FC]/60 hover:text-[#E9D5FF]'
+                  }`}
+                >
+                  <Bookmark
+                    className="w-4 h-4 shrink-0"
+                    fill={myStatus === 'wishlist' ? 'currentColor' : 'none'}
+                  />
+                  <span>
+                    {myStatus === 'wishlist' ? 'Na lista · Quero jogar' : 'Quero jogar'}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => onOpenReview(game, myReview)}
+                  className="px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                >
+                  {myReview ? 'Editar minha avaliação' : 'Avaliar jogo'}
+                </button>
+              </div>
             </div>
 
             {game.reviewCount > 0 && (
@@ -498,14 +536,14 @@ export function GameDetailView({
               </div>
             )}
 
-            {/* Personal Play Status Selector & Group Activity */}
+            {/* Personal Play Progress Selector & Group Activity */}
             <div className="space-y-4 pt-4 border-t border-[#222622]">
               <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium text-[#A8ACA5]">
-                    Meu status neste jogo
+                    Meu progresso neste jogo
                   </span>
-                  {myStatus && (
+                  {myStatus && myStatus !== 'wishlist' && (
                     <button
                       type="button"
                       disabled={statusBusy}
@@ -518,7 +556,7 @@ export function GameDetailView({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {GAME_PLAY_STATUS_LIST.map((st) => {
+                  {GAME_PROGRESS_STATUS_LIST.map((st) => {
                     const meta = GAME_PLAY_STATUS_META[st];
                     const active = myStatus === st;
                     return (

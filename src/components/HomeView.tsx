@@ -18,10 +18,12 @@ import {
 } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import {
+  GAME_PLAY_STATUS_META,
   formatReleaseDate,
   formatTimestamp,
   resolveAssetUrl,
   type CobraEvent,
+  type GameProgressStatus,
   type GameWithStats,
   type Review,
 } from '../types';
@@ -70,6 +72,7 @@ type BannerSlide =
       authorName: string;
       authorPhotoURL: string;
       authorFallbackPhotoURL: string;
+      authorPlayStatus: GameProgressStatus | null;
       backdropUrl: string;
     }
   | {
@@ -131,6 +134,7 @@ export function HomeView({
     eventVotes,
     nominationsByEvent,
     membersById,
+    userStatusesByGame,
     dataLoading,
     seedStarterGames,
   } = useVeredito();
@@ -221,6 +225,11 @@ export function HomeView({
     for (const rev of reviews.slice(0, 5)) {
       const game = gamesById.get(rev.gameId) || null;
       const liveAuthor = membersById[rev.authorId];
+      const statusEntry = (userStatusesByGame[rev.gameId] || []).find(
+        (item) => item.userId === rev.authorId,
+      );
+      const authorPlayStatus: GameProgressStatus | null =
+        statusEntry && statusEntry.status !== 'wishlist' ? statusEntry.status : null;
       list.push({
         id: `review_${rev.id}`,
         kind: 'review',
@@ -230,12 +239,21 @@ export function HomeView({
         authorName: liveAuthor?.displayName || rev.authorName,
         authorPhotoURL: liveAuthor?.photoURL || '',
         authorFallbackPhotoURL: rev.authorPhotoURL || '',
+        authorPlayStatus,
         backdropUrl: game?.coverUrl || rev.gameCoverUrl || '',
       });
     }
 
     return list;
-  }, [topRatedGame, ongoingEvents, nominationsByEvent, reviews, gamesById, membersById]);
+  }, [
+    topRatedGame,
+    ongoingEvents,
+    nominationsByEvent,
+    reviews,
+    gamesById,
+    membersById,
+    userStatusesByGame,
+  ]);
 
   useEffect(() => {
     if (activeSlideIndex >= slides.length) {
@@ -699,9 +717,18 @@ export function HomeView({
                           size="sm"
                         />
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-[#F2F2EE] group-hover:text-[#4ADE80] transition-colors truncate">
-                            {currentSlide.authorName}
-                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <p className="text-sm font-medium text-[#F2F2EE] group-hover:text-[#4ADE80] transition-colors truncate">
+                              {currentSlide.authorName}
+                            </p>
+                            {currentSlide.authorPlayStatus && (
+                              <span
+                                className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-medium rounded border shrink-0 ${GAME_PLAY_STATUS_META[currentSlide.authorPlayStatus].activeClass}`}
+                              >
+                                {GAME_PLAY_STATUS_META[currentSlide.authorPlayStatus].label}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-[#8C9288] truncate">
                             {currentSlide.review.platformPlayed}
                             {currentSlide.review.hoursPlayed > 0

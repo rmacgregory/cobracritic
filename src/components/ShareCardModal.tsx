@@ -13,6 +13,7 @@ export type ShareCardPayload =
       authorName: string;
       platformPlayed: string;
       hoursPlayed: number;
+      playStatusLabel?: string;
       ratingOnly: boolean;
       hasSpoiler: boolean;
       headline: string;
@@ -264,7 +265,10 @@ async function renderShareCardToDataUrl(payload: ShareCardPayload): Promise<stri
 
     ctx.fillStyle = '#A8ACA5';
     ctx.font = '500 24px "Plus Jakarta Sans", sans-serif';
-    const metaLine = `${payload.platformPlayed}${payload.hoursPlayed > 0 ? ` · ${payload.hoursPlayed}h jogadas` : ''}`;
+    const metaParts = [payload.platformPlayed];
+    if (payload.hoursPlayed > 0) metaParts.push(`${payload.hoursPlayed}h jogadas`);
+    if (payload.playStatusLabel) metaParts.push(payload.playStatusLabel);
+    const metaLine = metaParts.join(' · ');
     ctx.fillText(metaLine, infoX + 150, badgeY + 86);
 
     ctx.fillStyle = '#4ADE80';

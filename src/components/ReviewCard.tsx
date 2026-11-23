@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import {
+  GAME_PLAY_STATUS_META,
   LIMITS,
   formatTimestamp,
   getScoreMeta,
@@ -159,6 +160,7 @@ export function ReviewCard({
     membersById,
     commentsByReview,
     reactionsByReview,
+    userStatusesByGame,
     addComment,
     deleteComment,
     deleteReview,
@@ -277,6 +279,13 @@ export function ReviewCard({
   const isRatingOnly = Boolean(
     review.ratingOnly || (!review.headline.trim() && !review.body.trim()),
   );
+  const authorStatusEntry = (userStatusesByGame[review.gameId] || []).find(
+    (item) => item.userId === review.authorId,
+  );
+  const authorPlayStatus =
+    authorStatusEntry && authorStatusEntry.status !== 'wishlist'
+      ? authorStatusEntry.status
+      : null;
 
   const handleInsertMention = (
     target: 'comment' | 'reply',
@@ -437,7 +446,7 @@ export function ReviewCard({
             size="md"
           />
           <div className="min-w-0">
-            <div className="flex items-center gap-2 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
               {onSelectAuthor ? (
                 <button
                   type="button"
@@ -454,6 +463,13 @@ export function ReviewCard({
               {adminUids.has(review.authorId) && (
                 <span className="text-[10px] font-mono text-[#4ADE80] shrink-0">
                   ADMIN
+                </span>
+              )}
+              {authorPlayStatus && (
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded border shrink-0 ${GAME_PLAY_STATUS_META[authorPlayStatus].activeClass}`}
+                >
+                  {GAME_PLAY_STATUS_META[authorPlayStatus].label}
                 </span>
               )}
             </div>
@@ -1108,6 +1124,9 @@ export function ReviewCard({
             authorName: resolvedAuthorName,
             platformPlayed: review.platformPlayed,
             hoursPlayed: review.hoursPlayed,
+            playStatusLabel: authorPlayStatus
+              ? GAME_PLAY_STATUS_META[authorPlayStatus].label
+              : undefined,
             ratingOnly: isRatingOnly,
             hasSpoiler: Boolean(review.hasSpoiler),
             headline: review.headline,

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   ArrowLeft,
   Ban,
+  Bookmark,
   HeartHandshake,
   Search,
   Share2,
@@ -13,6 +14,7 @@ import { useVeredito } from '../context/VereditoContext';
 import {
   GAME_PLAY_STATUS_LIST,
   GAME_PLAY_STATUS_META,
+  GAME_PROGRESS_STATUS_LIST,
   LIMITS,
   type GamePlayStatus,
   type GameWithStats,
@@ -558,8 +560,8 @@ export function MembersView({
               </span>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {GAME_PLAY_STATUS_LIST.map((st) => {
+            <div className="flex flex-wrap items-center gap-2">
+              {GAME_PROGRESS_STATUS_LIST.map((st) => {
                 const meta = GAME_PLAY_STATUS_META[st];
                 const count = activeMemberShelf[st].length;
                 const active = shelfStatus === st;
@@ -578,6 +580,29 @@ export function MembersView({
                   </button>
                 );
               })}
+
+              <span
+                aria-hidden="true"
+                className="hidden sm:inline-block w-px h-5 bg-[#262B26] mx-0.5"
+              />
+
+              <button
+                type="button"
+                onClick={() => setShelfStatus('wishlist')}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border transition-colors tabular-nums cursor-pointer ${
+                  shelfStatus === 'wishlist'
+                    ? GAME_PLAY_STATUS_META.wishlist.activeClass
+                    : 'bg-[#0C0D0C] border-[#262B26] text-[#C084FC]/90 hover:border-[#533378] hover:text-[#E9D5FF]'
+                }`}
+              >
+                <Bookmark
+                  className="w-3.5 h-3.5 shrink-0"
+                  fill={shelfStatus === 'wishlist' ? 'currentColor' : 'none'}
+                />
+                <span>
+                  {GAME_PLAY_STATUS_META.wishlist.label} ({activeMemberShelf.wishlist.length})
+                </span>
+              </button>
             </div>
 
             {activeMemberShelf[shelfStatus].length === 0 ? (

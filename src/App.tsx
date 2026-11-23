@@ -43,6 +43,7 @@ function CobraCriticShell() {
     profileSetupPending,
     gamesWithStats,
     members,
+    myStatusByGame,
     signInWithGoogle,
     signInWithAdminCredentials,
     signOutUser,
@@ -527,6 +528,7 @@ function CobraCriticShell() {
         <ReviewFormModal
           game={reviewModalTarget.game}
           existingReview={reviewModalTarget.existing}
+          initialPlayStatus={myStatusByGame[reviewModalTarget.game.id] ?? null}
           onClose={() => setReviewModalTarget(null)}
           onSubmit={async (input) => {
             await saveReview(reviewModalTarget.game, input);
