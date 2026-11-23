@@ -1189,14 +1189,14 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-[#4ADE80] flex items-center gap-1.5">
             <Trophy className="w-3.5 h-3.5" />
-            <span>Bolões e Premiações do Grupo</span>
+            <span>Votações e Eventos do Grupo</span>
           </p>
           <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#F2F2EE]">
             Eventos dos Cobras
           </h1>
           <p className="text-sm text-[#90968C] max-w-2xl">
-            Vote nos indicados de cada categoria com palpites abertos para todo o grupo e descubra
-            quem mais acerta quando os vencedores oficiais forem revelados.
+            Participe das votações do grupo — da escolha do próximo jogo da rodada a premiações e
+            bolões especiais — acompanhe os votos de todos os membros e confira os resultados.
           </p>
         </div>
 
@@ -1295,8 +1295,8 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
             </h2>
             <p className="text-sm text-[#90968C] max-w-md mx-auto">
               {isAdmin
-                ? 'Crie o primeiro evento de premiação ou bolão clicando em “Novo evento” acima, monte as categorias e escolha os jogos do catálogo.'
-                : 'Quando um administrador ativar um evento de votação ou premiação, ele aparecerá aqui para você registrar seus palpites.'}
+                ? 'Crie o primeiro evento clicando em “Novo evento” acima, defina as categorias e selecione os jogos para votação do grupo.'
+                : 'Quando um administrador abrir uma nova votação ou evento do grupo, ele aparecerá aqui para você participar.'}
             </p>
             {isAdmin && (
               <div className="pt-2">
@@ -1404,7 +1404,7 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
                                 myVotedCount > 0 ? 'text-[#4ADE80] font-medium' : 'text-[#90968C]'
                               }
                             >
-                              Seus palpites: {myVotedCount}/{ev.categories.length}
+                              Seus votos: {myVotedCount}/{ev.categories.length}
                             </span>
                           </>
                         )}
@@ -1488,7 +1488,7 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
                     <>
                       <span aria-hidden="true">·</span>
                       <span className="text-[#4ADE80] font-medium tabular-nums">
-                        Seus palpites: {myVotedCategoriesCount}/{selectedEvent.categories.length}
+                        Seus votos: {myVotedCategoriesCount}/{selectedEvent.categories.length}
                       </span>
                     </>
                   )}
