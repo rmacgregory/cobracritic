@@ -1,5 +1,13 @@
 import { useMemo, useState } from 'react';
-import { ArrowRight, Plus, RotateCcw, Search, SlidersHorizontal } from 'lucide-react';
+import {
+  ArrowRight,
+  LayoutGrid,
+  List,
+  Plus,
+  RotateCcw,
+  Search,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import {
   GENRES,
@@ -29,6 +37,10 @@ type SortOption =
   | 'reviews_desc'
   | 'title_asc';
 
+type CatalogViewMode = 'grid' | 'list';
+
+const VIEW_MODE_STORAGE_KEY = 'cobracritic_catalog_view_mode';
+
 export function CatalogView({
   selectedPlatform,
   selectedGenre,
@@ -48,6 +60,23 @@ export function CatalogView({
   const [showDateRange, setShowDateRange] = useState(false);
   const [sortBy, setSortBy] = useState<SortOption>('score_desc');
   const [seeding, setSeeding] = useState(false);
+  const [viewMode, setViewMode] = useState<CatalogViewMode>(() => {
+    try {
+      const saved = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+      return saved === 'list' ? 'list' : 'grid';
+    } catch {
+      return 'grid';
+    }
+  });
+
+  const handleChangeViewMode = (mode: CatalogViewMode) => {
+    setViewMode(mode);
+    try {
+      window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, mode);
+    } catch {
+      // ignore storage errors
+    }
+  };
 
   const availableYears = useMemo(() => {
     const years = new Set<number>();
@@ -366,16 +395,53 @@ export function CatalogView({
             </p>
           </div>
 
-          {reviews.length > 0 && (
-            <button
-              type="button"
-              onClick={onGoToFeed}
-              className="inline-flex items-center gap-1.5 text-sm font-medium text-[#4ADE80] hover:underline cursor-pointer"
+          <div className="flex flex-wrap items-center gap-3">
+            <div
+              role="group"
+              aria-label="Modo de visualização do catálogo"
+              className="inline-flex items-center bg-[#141614] border border-[#262A26] rounded-md p-0.5"
             >
-              <span>Abrir feed social</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          )}
+              <button
+                type="button"
+                onClick={() => handleChangeViewMode('grid')}
+                aria-pressed={viewMode === 'grid'}
+                title="Grid de pôsteres"
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-[#F2F2EE] text-[#0C0D0C]'
+                    : 'text-[#90968C] hover:text-[#F2F2EE]'
+                }`}
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Pôsteres</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleChangeViewMode('list')}
+                aria-pressed={viewMode === 'list'}
+                title="Lista compacta"
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'bg-[#F2F2EE] text-[#0C0D0C]'
+                    : 'text-[#90968C] hover:text-[#F2F2EE]'
+                }`}
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>Lista</span>
+              </button>
+            </div>
+
+            {reviews.length > 0 && (
+              <button
+                type="button"
+                onClick={onGoToFeed}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-[#4ADE80] hover:underline cursor-pointer"
+              >
+                <span>Abrir feed social</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Filter Bar: Search, Platform, Genre, Release Date, Sort */}
@@ -540,6 +606,55 @@ export function CatalogView({
                 Cadastrar jogo
               </button>
             </div>
+          </div>
+        ) : viewMode === 'list' ? (
+          <div className="border border-[#262A26] bg-[#141614] divide-y divide-[#222622]">
+            <div className="hidden sm:grid sm:grid-cols-12 items-center gap-3 px-4 py-2 bg-[#101210] text-[11px] font-mono uppercase tracking-wider text-[#787D75]">
+              <span className="col-span-1">Nota</span>
+              <span className="col-span-6">Jogo</span>
+              <span className="col-span-4">Plataformas</span>
+              <span className="col-span-1 text-right">Ação</span>
+            </div>
+            {filteredGames.map((game) => (
+              <div
+                key={game.id}
+                className="flex sm:grid sm:grid-cols-12 items-center gap-3 px-4 py-2.5 hover:bg-[#191D19] transition-colors"
+              >
+                <div className="sm:col-span-1 shrink-0">
+                  <ScoreBadge score={game.averageScore} size="xs" />
+                </div>
+
+                <div className="min-w-0 flex-1 sm:col-span-6 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onSelectGame(game.id)}
+                    className="font-serif text-sm font-medium text-[#F2F2EE] hover:text-[#4ADE80] transition-colors truncate text-left cursor-pointer"
+                  >
+                    {game.title}
+                  </button>
+                  <span className="hidden md:inline text-[11px] font-mono text-[#6E736B] tabular-nums shrink-0">
+                    {game.releaseYear}
+                  </span>
+                </div>
+
+                <p
+                  title={game.platforms.join(' · ')}
+                  className="text-xs text-[#8C9288] truncate max-w-[34%] sm:max-w-none sm:col-span-4"
+                >
+                  {game.platforms.join(' · ')}
+                </p>
+
+                <div className="sm:col-span-1 flex justify-end shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onOpenReview(game)}
+                    className="text-xs font-medium text-[#A8ACA5] hover:text-[#4ADE80] transition-colors whitespace-nowrap cursor-pointer"
+                  >
+                    Avaliar
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-7">
