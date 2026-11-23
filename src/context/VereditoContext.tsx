@@ -36,10 +36,12 @@ import {
 } from '../firebase';
 import {
   ADMIN_AUTH_DOMAIN,
+  DEFAULT_NOTIFICATION_PREFERENCES,
   LIMITS,
   MASTER_ADMIN_EMAIL,
   STARTER_GAMES,
   computeWeightedScore,
+  resolveNotificationPreferences,
   sanitizeAvatarUrl,
   sanitizeOptionalUrl,
   type AdminGrant,
@@ -56,6 +58,7 @@ import {
   type GameInput,
   type GamePlayStatus,
   type GameWithStats,
+  type NotificationPreferences,
   type Review,
   type ReviewComment,
   type ReviewInput,
@@ -105,6 +108,27 @@ export interface CoverReportNotification {
   note: string;
   createdAt?: CoverReport['createdAt'];
   unread: boolean;
+}
+
+export interface GroupActivityNotification {
+  id: string;
+  kind: 'featuredRound' | 'event';
+  title: string;
+  subtitle: string;
+  gameId?: string;
+  eventId?: string;
+  eventStatus?: EventStatus;
+  actorName?: string;
+  createdAt?: CobraEvent['updatedAt'];
+  unread: boolean;
+}
+
+function buildFeaturedRoundNotifId(round: FeaturedRoundGame): string {
+  const slug = `${round.gameId || 'custom'}_${round.title}_${round.roundLabel}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .slice(0, 80);
+  return `round_${slug}`;
 }
 
 interface NotificationReadState {
@@ -188,13 +212,17 @@ interface VereditoContextValue {
   reactionsByReview: Record<string, ReviewReaction[]>;
   commentNotifications: CommentNotification[];
   coverReportNotifications: CoverReportNotification[];
+  groupNotifications: GroupActivityNotification[];
+  notificationPreferences: NotificationPreferences;
   unreadNotificationCount: number;
   latestLiveNotification: CommentNotification | null;
   latestLiveCoverReport: CoverReportNotification | null;
+  latestLiveGroupNotification: GroupActivityNotification | null;
   markNotificationRead: (notifId: string) => void;
   markAllNotificationsRead: () => void;
   dismissLiveNotification: () => void;
   dismissLiveCoverReport: () => void;
+  dismissLiveGroupNotification: () => void;
   signInWithGoogle: () => Promise<void>;
   signInWithAdminCredentials: (usernameOrEmail: string, password: string) => Promise<void>;
   signOutUser: () => Promise<void>;
@@ -204,6 +232,9 @@ interface VereditoContextValue {
     topFiveGames: string[];
     photoURL?: string;
   }) => Promise<void>;
+  updateNotificationPreferences: (
+    next: Partial<NotificationPreferences>,
+  ) => Promise<void>;
   createGame: (input: GameInput) => Promise<string>;
   updateGame: (gameId: string, input: GameInput) => Promise<void>;
   deleteGame: (gameId: string) => Promise<void>;
@@ -305,13 +336,21 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   });
   const [liveNotifId, setLiveNotifId] = useState<string | null>(null);
   const [liveCoverReportId, setLiveCoverReportId] = useState<string | null>(null);
+  const [liveGroupNotifId, setLiveGroupNotifId] = useState<string | null>(null);
   const [viewAsMember, setViewAsMember] = useState(false);
   const seenCommentIdsRef = useRef<Set<string>>(new Set());
   const commentsInitializedRef = useRef(false);
   const seenCoverReportIdsRef = useRef<Set<string>>(new Set());
   const coverReportsInitializedRef = useRef(false);
+  const eventsInitializedRef = useRef(false);
+  const seenEventStatusByIdRef = useRef<Map<string, EventStatus>>(new Map());
+  const featuredRoundInitializedRef = useRef(false);
+  const lastFeaturedRoundKeyRef = useRef<string | null>(null);
   const myReviewIdsRef = useRef<Set<string>>(new Set());
   const myCommentIdsRef = useRef<Set<string>>(new Set());
+  const notificationPreferencesRef = useRef<NotificationPreferences>(
+    DEFAULT_NOTIFICATION_PREFERENCES,
+  );
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
@@ -387,13 +426,19 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         setCoverReports([]);
         setLiveNotifId(null);
         setLiveCoverReportId(null);
+        setLiveGroupNotifId(null);
         setViewAsMember(false);
         seenCommentIdsRef.current = new Set();
         commentsInitializedRef.current = false;
         seenCoverReportIdsRef.current = new Set();
         coverReportsInitializedRef.current = false;
+        eventsInitializedRef.current = false;
+        seenEventStatusByIdRef.current = new Map();
+        featuredRoundInitializedRef.current = false;
+        lastFeaturedRoundKeyRef.current = null;
         myReviewIdsRef.current = new Set();
         myCommentIdsRef.current = new Set();
+        notificationPreferencesRef.current = DEFAULT_NOTIFICATION_PREFERENCES;
       }
     });
 
@@ -509,11 +554,15 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
                   Array.isArray(data.mentionedUserIds) &&
                     data.mentionedUserIds.includes(user.uid),
                 );
+                const prefs = notificationPreferencesRef.current;
+                const matchesCommentOrReply =
+                  prefs.comments &&
+                  (myReviewIdsRef.current.has(data.reviewId) || isReplyToMyComment);
+                const matchesMention = prefs.mentions && isMentioningMe;
                 if (
+                  prefs.liveToasts &&
                   data.authorId !== user.uid &&
-                  (myReviewIdsRef.current.has(data.reviewId) ||
-                    isReplyToMyComment ||
-                    isMentioningMe)
+                  (matchesCommentOrReply || matchesMention)
                 ) {
                   setLiveNotifId(docId);
                 }
@@ -539,6 +588,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       (err) => handleFirestoreError(err, OperationType.LIST, 'reactions'),
     );
 
+    eventsInitializedRef.current = false;
+    seenEventStatusByIdRef.current = new Map();
+
     const unsubEvents = onSnapshot(
       query(collection(db, 'events'), where('visibility', '==', 'group')),
       (snap) => {
@@ -547,6 +599,30 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           ...(d.data() as Omit<CobraEvent, 'id'>),
         }));
         list.sort((a, b) => getTimeMillis(b.createdAt) - getTimeMillis(a.createdAt));
+
+        if (!eventsInitializedRef.current) {
+          const map = new Map<string, EventStatus>();
+          for (const ev of list) map.set(ev.id, ev.status);
+          seenEventStatusByIdRef.current = map;
+          eventsInitializedRef.current = true;
+        } else {
+          const prefs = notificationPreferencesRef.current;
+          for (const ev of list) {
+            const prevStatus = seenEventStatusByIdRef.current.get(ev.id);
+            if (prevStatus !== ev.status) {
+              seenEventStatusByIdRef.current.set(ev.id, ev.status);
+              if (
+                ev.status !== 'inactive' &&
+                prefs.events &&
+                prefs.liveToasts &&
+                ev.createdBy !== user.uid
+              ) {
+                setLiveGroupNotifId(`event_${ev.id}_${ev.status}`);
+              }
+            }
+          }
+        }
+
         setEvents(list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'events'),
@@ -591,17 +667,38 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       (err) => handleFirestoreError(err, OperationType.LIST, 'userGameStatuses'),
     );
 
+    featuredRoundInitializedRef.current = false;
+    lastFeaturedRoundKeyRef.current = null;
+
     const unsubFeaturedRound = onSnapshot(
       doc(db, 'groupConfig', 'featuredRound'),
       (snap) => {
         if (!snap.exists()) {
           setFeaturedRound(null);
+          featuredRoundInitializedRef.current = true;
+          lastFeaturedRoundKeyRef.current = null;
           return;
         }
-        setFeaturedRound({
+        const nextRound: FeaturedRoundGame = {
           id: snap.id,
           ...(snap.data() as Omit<FeaturedRoundGame, 'id'>),
-        });
+        };
+        const nextKey = buildFeaturedRoundNotifId(nextRound);
+        if (!featuredRoundInitializedRef.current) {
+          featuredRoundInitializedRef.current = true;
+          lastFeaturedRoundKeyRef.current = nextKey;
+        } else if (lastFeaturedRoundKeyRef.current !== nextKey) {
+          lastFeaturedRoundKeyRef.current = nextKey;
+          const prefs = notificationPreferencesRef.current;
+          if (
+            prefs.featuredRound &&
+            prefs.liveToasts &&
+            nextRound.pinnedBy !== user.uid
+          ) {
+            setLiveGroupNotifId(nextKey);
+          }
+        }
+        setFeaturedRound(nextRound);
       },
       (err) => handleFirestoreError(err, OperationType.GET, 'groupConfig/featuredRound'),
     );
@@ -626,6 +723,15 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     if (!user) return null;
     return members.find((m) => m.uid === user.uid) || null;
   }, [members, user]);
+
+  const notificationPreferences = useMemo<NotificationPreferences>(
+    () => resolveNotificationPreferences(profile?.notificationPreferences),
+    [profile?.notificationPreferences],
+  );
+
+  useEffect(() => {
+    notificationPreferencesRef.current = notificationPreferences;
+  }, [notificationPreferences]);
 
   const membersById = useMemo(() => {
     const map: Record<string, UserProfile> = {};
@@ -727,7 +833,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
               !seenCoverReportIdsRef.current.has(docId)
             ) {
               seenCoverReportIdsRef.current.add(docId);
-              if (data.reporterId !== user.uid) {
+              const prefs = notificationPreferencesRef.current;
+              if (
+                prefs.coverReports &&
+                prefs.liveToasts &&
+                data.reporterId !== user.uid
+              ) {
                 setLiveCoverReportId(docId);
               }
             }
@@ -919,7 +1030,11 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         const mentionedMe = Boolean(
           Array.isArray(c.mentionedUserIds) && c.mentionedUserIds.includes(user.uid),
         );
-        return onMyReview || replyToMyComment || mentionedMe;
+        const allowedByCommentPref =
+          notificationPreferences.comments && (onMyReview || replyToMyComment);
+        const allowedByMentionPref =
+          notificationPreferences.mentions && mentionedMe;
+        return allowedByCommentPref || allowedByMentionPref;
       })
       .sort((a, b) => getTimeMillis(b.createdAt) - getTimeMillis(a.createdAt))
       .map((c) => {
@@ -953,7 +1068,16 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           unread,
         };
       });
-  }, [user, reviews, games, comments, membersById, notifReadState]);
+  }, [
+    user,
+    reviews,
+    games,
+    comments,
+    membersById,
+    notifReadState,
+    notificationPreferences.comments,
+    notificationPreferences.mentions,
+  ]);
 
   const openCoverReports = useMemo(
     () => (isAdmin ? coverReports.filter((r) => r.status === 'open') : []),
@@ -972,7 +1096,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   }, [coverReports, user]);
 
   const coverReportNotifications = useMemo<CoverReportNotification[]>(() => {
-    if (!user || !isAdmin) return [];
+    if (!user || !isAdmin || !notificationPreferences.coverReports) return [];
     const gamesById = new Map<string, Game>();
     for (const g of games) gamesById.set(g.id, g);
     const readIdSet = new Set(notifReadState.readIds);
@@ -1002,26 +1126,129 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         unread,
       };
     });
-  }, [user, isAdmin, openCoverReports, games, membersById, notifReadState]);
+  }, [
+    user,
+    isAdmin,
+    notificationPreferences.coverReports,
+    openCoverReports,
+    games,
+    membersById,
+    notifReadState,
+  ]);
+
+  const groupNotifications = useMemo<GroupActivityNotification[]>(() => {
+    if (!user) return [];
+    const readIdSet = new Set(notifReadState.readIds);
+    const list: GroupActivityNotification[] = [];
+
+    if (featuredRound && notificationPreferences.featuredRound) {
+      const notifId = buildFeaturedRoundNotifId(featuredRound);
+      const updatedMs = getTimeMillis(featuredRound.updatedAt);
+      const unread =
+        !readIdSet.has(notifId) && updatedMs > notifReadState.readAllBeforeMs;
+      list.push({
+        id: notifId,
+        kind: 'featuredRound',
+        title: `${featuredRound.roundLabel}: ${featuredRound.title}`,
+        subtitle:
+          featuredRound.note ||
+          `Fixado por ${featuredRound.pinnedByName} no topo do catálogo.`,
+        gameId: featuredRound.gameId || undefined,
+        actorName: featuredRound.pinnedByName,
+        createdAt: featuredRound.updatedAt,
+        unread,
+      });
+    }
+
+    if (notificationPreferences.events) {
+      for (const ev of events) {
+        if (ev.status === 'inactive') continue;
+        const notifId = `event_${ev.id}_${ev.status}`;
+        const updatedMs = getTimeMillis(ev.updatedAt || ev.createdAt);
+        const unread =
+          !readIdSet.has(notifId) && updatedMs > notifReadState.readAllBeforeMs;
+
+        let title = ev.title;
+        let subtitle = '';
+        if (ev.status === 'nominating') {
+          title = `Indicações abertas · ${ev.title}`;
+          subtitle = 'Indique 1 jogo para participar deste evento do grupo.';
+        } else if (ev.status === 'active') {
+          title = `Votação aberta · ${ev.title}`;
+          subtitle =
+            ev.mode === 'award'
+              ? 'Premiação ao vivo — registre seus palpites nas categorias.'
+              : 'Votação do grupo aberta — escolha seus favoritos.';
+        } else if (ev.status === 'closed') {
+          title = `Resultados publicados · ${ev.title}`;
+          subtitle =
+            ev.mode === 'award'
+              ? 'Confira os vencedores oficiais e o placar de acertos.'
+              : 'Confira os jogos mais votados pelo grupo.';
+        }
+
+        list.push({
+          id: notifId,
+          kind: 'event',
+          title,
+          subtitle,
+          eventId: ev.id,
+          eventStatus: ev.status,
+          actorName: ev.createdByName,
+          createdAt: ev.updatedAt || ev.createdAt,
+          unread,
+        });
+      }
+    }
+
+    list.sort((a, b) => getTimeMillis(b.createdAt) - getTimeMillis(a.createdAt));
+    return list;
+  }, [
+    user,
+    featuredRound,
+    events,
+    notifReadState,
+    notificationPreferences.featuredRound,
+    notificationPreferences.events,
+  ]);
 
   const unreadNotificationCount = useMemo(
     () =>
       commentNotifications.filter((n) => n.unread).length +
-      coverReportNotifications.filter((n) => n.unread).length,
-    [commentNotifications, coverReportNotifications],
+      coverReportNotifications.filter((n) => n.unread).length +
+      groupNotifications.filter((n) => n.unread).length,
+    [commentNotifications, coverReportNotifications, groupNotifications],
   );
 
   const latestLiveNotification = useMemo(() => {
-    if (!liveNotifId) return null;
+    if (!liveNotifId || !notificationPreferences.liveToasts) return null;
     return commentNotifications.find((n) => n.id === liveNotifId) || null;
-  }, [commentNotifications, liveNotifId]);
+  }, [commentNotifications, liveNotifId, notificationPreferences.liveToasts]);
 
   const latestLiveCoverReport = useMemo(() => {
-    if (!liveCoverReportId || !isAdmin) return null;
+    if (
+      !liveCoverReportId ||
+      !isAdmin ||
+      !notificationPreferences.coverReports ||
+      !notificationPreferences.liveToasts
+    ) {
+      return null;
+    }
     return (
       coverReportNotifications.find((n) => n.reportId === liveCoverReportId) || null
     );
-  }, [coverReportNotifications, liveCoverReportId, isAdmin]);
+  }, [
+    coverReportNotifications,
+    liveCoverReportId,
+    isAdmin,
+    notificationPreferences.coverReports,
+    notificationPreferences.liveToasts,
+  ]);
+
+  const latestLiveGroupNotification = useMemo(() => {
+    if (!liveGroupNotifId || !notificationPreferences.liveToasts) return null;
+    return groupNotifications.find((n) => n.id === liveGroupNotifId) || null;
+  }, [groupNotifications, liveGroupNotifId, notificationPreferences.liveToasts]);
 
   useEffect(() => {
     if (!liveNotifId) return;
@@ -1034,6 +1261,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const timer = window.setTimeout(() => setLiveCoverReportId(null), 8000);
     return () => window.clearTimeout(timer);
   }, [liveCoverReportId]);
+
+  useEffect(() => {
+    if (!liveGroupNotifId) return;
+    const timer = window.setTimeout(() => setLiveGroupNotifId(null), 7000);
+    return () => window.clearTimeout(timer);
+  }, [liveGroupNotifId]);
 
   const markNotificationRead = useCallback(
     (notifId: string) => {
@@ -1056,6 +1289,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const allIds = [
       ...commentNotifications.map((n) => n.id),
       ...coverReportNotifications.map((n) => n.id),
+      ...groupNotifications.map((n) => n.id),
     ];
     setNotifReadState((prev) => {
       const mergedIds = Array.from(new Set([...prev.readIds, ...allIds])).slice(-300);
@@ -1068,7 +1302,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     });
     setLiveNotifId(null);
     setLiveCoverReportId(null);
-  }, [user, commentNotifications, coverReportNotifications]);
+    setLiveGroupNotifId(null);
+  }, [user, commentNotifications, coverReportNotifications, groupNotifications]);
 
   const dismissLiveNotification = useCallback(() => {
     setLiveNotifId(null);
@@ -1076,6 +1311,10 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
 
   const dismissLiveCoverReport = useCallback(() => {
     setLiveCoverReportId(null);
+  }, []);
+
+  const dismissLiveGroupNotification = useCallback(() => {
+    setLiveGroupNotifId(null);
   }, []);
 
   const signInWithGoogle = async () => {
@@ -1188,6 +1427,28 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         bio: data.bio.trim().slice(0, LIMITS.BIO_MAX),
         topFiveGames: safeTopFive,
         favoriteGenre: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const updateNotificationPreferences = async (
+    next: Partial<NotificationPreferences>,
+  ) => {
+    if (!user || isBanned) return;
+    const merged: NotificationPreferences = {
+      ...resolveNotificationPreferences(profile?.notificationPreferences),
+      ...next,
+    };
+    const path = `users/${user.uid}`;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        notificationPreferences: merged,
+        topFiveGames: Array.isArray(profile?.topFiveGames)
+          ? profile.topFiveGames
+          : [],
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -2101,17 +2362,22 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         reactionsByReview,
         commentNotifications,
         coverReportNotifications,
+        groupNotifications,
+        notificationPreferences,
         unreadNotificationCount,
         latestLiveNotification,
         latestLiveCoverReport,
+        latestLiveGroupNotification,
         markNotificationRead,
         markAllNotificationsRead,
         dismissLiveNotification,
         dismissLiveCoverReport,
+        dismissLiveGroupNotification,
         signInWithGoogle,
         signInWithAdminCredentials,
         signOutUser,
         updateUserProfile,
+        updateNotificationPreferences,
         createGame,
         updateGame,
         deleteGame,

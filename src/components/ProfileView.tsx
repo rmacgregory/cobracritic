@@ -2,10 +2,17 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
+  AtSign,
+  Bell,
+  BellRing,
   Camera,
+  Flag,
   LogOut,
+  MessageSquare,
+  Pin,
   Plus,
   Share2,
+  Trophy,
   X,
 } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
@@ -15,6 +22,7 @@ import {
   LIMITS,
   type GamePlayStatus,
   type GameWithStats,
+  type NotificationPreferences,
   type Review,
 } from '../types';
 import { AvatarCropModal } from './AvatarCropModal';
@@ -25,21 +33,32 @@ import { ShareCardModal } from './ShareCardModal';
 interface ProfileViewProps {
   onSelectGame: (gameId: string) => void;
   onEditReview: (game: GameWithStats, review: Review) => void;
+  focusSection?: 'notifications' | null;
+  onClearFocusSection?: () => void;
 }
 
-export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
+export function ProfileView({
+  onSelectGame,
+  onEditReview,
+  focusSection,
+  onClearFocusSection,
+}: ProfileViewProps) {
   const {
     user,
     profile,
+    isAdmin,
     gamesWithStats,
     reviews,
     comments,
     userGameStatuses,
+    notificationPreferences,
     updateUserProfile,
+    updateNotificationPreferences,
     signOutUser,
   } = useVeredito();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const notifPrefsRef = useRef<HTMLDivElement | null>(null);
 
   const [displayName, setDisplayName] = useState(
     profile?.displayName || user?.displayName || '',
@@ -58,6 +77,37 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
   const [savedNotice, setSavedNotice] = useState(false);
   const [showShareTop5, setShowShareTop5] = useState(false);
   const [shelfStatus, setShelfStatus] = useState<GamePlayStatus>('playing');
+
+  const [localPrefs, setLocalPrefs] = useState<NotificationPreferences>(
+    notificationPreferences,
+  );
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [prefsSavedNotice, setPrefsSavedNotice] = useState(false);
+  const [prefsError, setPrefsError] = useState<string | null>(null);
+  const [highlightNotifPanel, setHighlightNotifPanel] = useState(false);
+
+  useEffect(() => {
+    setLocalPrefs(notificationPreferences);
+  }, [notificationPreferences]);
+
+  useEffect(() => {
+    if (focusSection !== 'notifications') return;
+    setHighlightNotifPanel(true);
+    const scrollTimer = window.setTimeout(() => {
+      notifPrefsRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      });
+    }, 60);
+    const clearTimer = window.setTimeout(() => {
+      setHighlightNotifPanel(false);
+      onClearFocusSection?.();
+    }, 2200);
+    return () => {
+      window.clearTimeout(scrollTimer);
+      window.clearTimeout(clearTimer);
+    };
+  }, [focusSection, onClearFocusSection]);
 
   useEffect(() => {
     if (profile) {
@@ -245,6 +295,108 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
       setSaving(false);
     }
   };
+
+  const handleToggleNotificationPref = async (
+    key: keyof NotificationPreferences,
+  ) => {
+    const previous = localPrefs;
+    const nextValue = !localPrefs[key];
+    const nextPrefs: NotificationPreferences = {
+      ...localPrefs,
+      [key]: nextValue,
+    };
+    setLocalPrefs(nextPrefs);
+    setPrefsError(null);
+    setPrefsSavedNotice(false);
+    setSavingPrefs(true);
+    try {
+      await updateNotificationPreferences({ [key]: nextValue });
+      setPrefsSavedNotice(true);
+    } catch {
+      setLocalPrefs(previous);
+      setPrefsError('Não foi possível salvar suas preferências. Tente novamente.');
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  const handleSetAllNotificationPrefs = async (enabled: boolean) => {
+    const previous = localPrefs;
+    const nextPrefs: NotificationPreferences = {
+      comments: enabled,
+      mentions: enabled,
+      featuredRound: enabled,
+      events: enabled,
+      coverReports: isAdmin ? enabled : localPrefs.coverReports,
+      liveToasts: enabled,
+    };
+    setLocalPrefs(nextPrefs);
+    setPrefsError(null);
+    setPrefsSavedNotice(false);
+    setSavingPrefs(true);
+    try {
+      await updateNotificationPreferences(nextPrefs);
+      setPrefsSavedNotice(true);
+    } catch {
+      setLocalPrefs(previous);
+      setPrefsError('Não foi possível salvar suas preferências. Tente novamente.');
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  const notificationEventOptions: Array<{
+    key: keyof NotificationPreferences;
+    title: string;
+    description: string;
+    icon: React.ReactNode;
+    adminOnly?: boolean;
+  }> = [
+    {
+      key: 'comments',
+      title: 'Comentários e respostas',
+      description:
+        'Quando alguém comentar em uma crítica sua ou responder um comentário seu.',
+      icon: <MessageSquare className="w-4 h-4 text-[#4ADE80]" />,
+    },
+    {
+      key: 'mentions',
+      title: 'Menções (@membro)',
+      description: 'Quando outro Cobra marcar você com @nome em uma discussão.',
+      icon: <AtSign className="w-4 h-4 text-[#4ADE80]" />,
+    },
+    {
+      key: 'featuredRound',
+      title: 'Jogo da Rodada',
+      description:
+        'Quando um administrador fixar ou alterar o Jogo da Rodada no topo.',
+      icon: <Pin className="w-4 h-4 text-[#4ADE80]" />,
+    },
+    {
+      key: 'events',
+      title: 'Atualizações em Eventos',
+      description:
+        'Abertura de indicações, início de votações e publicação de resultados.',
+      icon: <Trophy className="w-4 h-4 text-[#60A5FA]" />,
+    },
+    {
+      key: 'coverReports',
+      title: 'Capas reportadas (Admin)',
+      description:
+        'Quando um membro sinalizar uma capa incorreta ou quebrada no catálogo.',
+      icon: <Flag className="w-4 h-4 text-[#FBBF24]" />,
+      adminOnly: true,
+    },
+  ];
+
+  const visibleEventOptions = notificationEventOptions.filter(
+    (opt) => !opt.adminOnly || isAdmin,
+  );
+  const activeEventCount = visibleEventOptions.filter(
+    (opt) => localPrefs[opt.key],
+  ).length;
+  const allEventsEnabled =
+    activeEventCount === visibleEventOptions.length && localPrefs.liveToasts;
 
   return (
     <main className="max-w-[1140px] mx-auto px-4 sm:px-8 py-8 space-y-10">
@@ -571,6 +723,145 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
               )}
             </div>
           </form>
+
+          {/* Notification Preferences Panel */}
+          <div
+            id="notification-preferences"
+            ref={notifPrefsRef}
+            className={`bg-[#141614] border p-6 space-y-5 transition-colors ${
+              highlightNotifPanel
+                ? 'border-[#4ADE80] ring-1 ring-[#4ADE80]/40'
+                : 'border-[#262A26]'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Bell className="w-4 h-4 text-[#4ADE80]" />
+                  <h2 className="font-serif text-lg font-medium text-[#F2F2EE]">
+                    Preferências de Notificação
+                  </h2>
+                </div>
+                <p className="text-xs text-[#8C9288] leading-relaxed">
+                  Escolha quais eventos do grupo aparecem no sino de notificações.
+                </p>
+              </div>
+              <span className="text-[11px] font-mono text-[#8C9288] tabular-nums shrink-0 pt-0.5">
+                {activeEventCount}/{visibleEventOptions.length} ativas
+              </span>
+            </div>
+
+            <div className="divide-y divide-[#202420] border-t border-[#222622]">
+              {visibleEventOptions.map((option) => {
+                const enabled = localPrefs[option.key];
+                return (
+                  <div
+                    key={option.key}
+                    className="py-3.5 first:pt-3.5 flex items-start justify-between gap-4"
+                  >
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="mt-0.5 shrink-0">{option.icon}</div>
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="text-sm font-medium text-[#F2F2EE]">
+                          {option.title}
+                        </p>
+                        <p className="text-xs text-[#8C9288] leading-relaxed">
+                          {option.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={enabled}
+                      aria-label={option.title}
+                      disabled={savingPrefs}
+                      onClick={() => handleToggleNotificationPref(option.key)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors cursor-pointer disabled:opacity-60 mt-0.5 ${
+                        enabled
+                          ? 'bg-[#16A34A] border-[#22C55E]'
+                          : 'bg-[#1F241F] border-[#343A34]'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                          enabled ? 'translate-x-[18px]' : 'translate-x-[2px]'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* Live pop-up alerts toggle */}
+              <div className="pt-4 pb-1 flex items-start justify-between gap-4">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="mt-0.5 shrink-0">
+                    <BellRing className="w-4 h-4 text-[#A8ACA5]" />
+                  </div>
+                  <div className="min-w-0 space-y-0.5">
+                    <p className="text-sm font-medium text-[#F2F2EE]">
+                      Alertas flutuantes em tempo real
+                    </p>
+                    <p className="text-xs text-[#8C9288] leading-relaxed">
+                      Mostrar aviso discreto no canto da tela quando uma notificação
+                      ativa chegar.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={localPrefs.liveToasts}
+                  aria-label="Alertas flutuantes em tempo real"
+                  disabled={savingPrefs}
+                  onClick={() => handleToggleNotificationPref('liveToasts')}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors cursor-pointer disabled:opacity-60 mt-0.5 ${
+                    localPrefs.liveToasts
+                      ? 'bg-[#16A34A] border-[#22C55E]'
+                      : 'bg-[#1F241F] border-[#343A34]'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      localPrefs.liveToasts
+                        ? 'translate-x-[18px]'
+                        : 'translate-x-[2px]'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            {prefsError && (
+              <p className="text-xs text-[#F87171]" role="alert">
+                {prefsError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-2 border-t border-[#222622]">
+              <button
+                type="button"
+                disabled={savingPrefs}
+                onClick={() => handleSetAllNotificationPrefs(!allEventsEnabled)}
+                className="text-xs font-medium text-[#A8ACA5] hover:text-[#4ADE80] transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {allEventsEnabled ? 'Silenciar tudo' : 'Ativar todas'}
+              </button>
+
+              {savingPrefs ? (
+                <span className="text-xs text-[#8C9288] font-mono">
+                  Salvando...
+                </span>
+              ) : prefsSavedNotice ? (
+                <span className="text-xs text-[#4ADE80] font-medium">
+                  Preferências salvas
+                </span>
+              ) : null}
+            </div>
+          </div>
         </section>
 
         {/* Right column: TOP 5 showcase + Published Reviews */}

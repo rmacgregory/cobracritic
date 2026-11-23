@@ -133,6 +133,39 @@ export const CURATED_COVERS: CuratedCover[] = [
   },
 ];
 
+export interface NotificationPreferences {
+  comments: boolean;
+  mentions: boolean;
+  featuredRound: boolean;
+  events: boolean;
+  coverReports: boolean;
+  liveToasts: boolean;
+}
+
+export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
+  comments: true,
+  mentions: true,
+  featuredRound: true,
+  events: true,
+  coverReports: true,
+  liveToasts: true,
+};
+
+export function resolveNotificationPreferences(
+  raw?: Partial<NotificationPreferences> | null,
+): NotificationPreferences {
+  return {
+    comments: raw?.comments ?? DEFAULT_NOTIFICATION_PREFERENCES.comments,
+    mentions: raw?.mentions ?? DEFAULT_NOTIFICATION_PREFERENCES.mentions,
+    featuredRound:
+      raw?.featuredRound ?? DEFAULT_NOTIFICATION_PREFERENCES.featuredRound,
+    events: raw?.events ?? DEFAULT_NOTIFICATION_PREFERENCES.events,
+    coverReports:
+      raw?.coverReports ?? DEFAULT_NOTIFICATION_PREFERENCES.coverReports,
+    liveToasts: raw?.liveToasts ?? DEFAULT_NOTIFICATION_PREFERENCES.liveToasts,
+  };
+}
+
 export interface UserProfile {
   uid: string;
   displayName: string;
@@ -140,6 +173,7 @@ export interface UserProfile {
   bio: string;
   topFiveGames?: string[];
   favoriteGenre?: string;
+  notificationPreferences?: NotificationPreferences;
   visibility: 'group';
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
@@ -586,6 +620,7 @@ export const STARTER_GAMES: GameInput[] = [
 ];
 
 export type ActiveTab =
+  | 'home'
   | 'catalog'
   | 'feed'
   | 'events'

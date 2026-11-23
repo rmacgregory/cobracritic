@@ -1,30 +1,50 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, Check, CheckCheck, Flag, MessageSquare, Pencil, X } from 'lucide-react';
-import { useVeredito } from '../context/VereditoContext';
+import {
+  Bell,
+  BellOff,
+  Check,
+  CheckCheck,
+  Flag,
+  MessageSquare,
+  Pencil,
+  Pin,
+  SlidersHorizontal,
+  Trophy,
+  X,
+} from 'lucide-react';
+import { useVeredito, type GroupActivityNotification } from '../context/VereditoContext';
 import { formatTimestamp, type GameWithStats } from '../types';
 import { MemberAvatar } from './MemberAvatar';
 
 interface NotificationsBellProps {
   onSelectGame: (gameId: string) => void;
   onEditGame?: (game: GameWithStats) => void;
+  onSelectEvents?: () => void;
+  onOpenNotificationSettings?: () => void;
 }
 
 export function NotificationsBell({
   onSelectGame,
   onEditGame,
+  onSelectEvents,
+  onOpenNotificationSettings,
 }: NotificationsBellProps) {
   const {
     isAdmin,
     gamesWithStats,
     commentNotifications,
     coverReportNotifications,
+    groupNotifications,
+    notificationPreferences,
     unreadNotificationCount,
     latestLiveNotification,
     latestLiveCoverReport,
+    latestLiveGroupNotification,
     markNotificationRead,
     markAllNotificationsRead,
     dismissLiveNotification,
     dismissLiveCoverReport,
+    dismissLiveGroupNotification,
     resolveCoverReport,
   } = useVeredito();
 
@@ -92,8 +112,33 @@ export function NotificationsBell({
     }
   };
 
+  const handleOpenGroupNotification = (item: GroupActivityNotification) => {
+    markNotificationRead(item.id);
+    dismissLiveGroupNotification();
+    setOpen(false);
+    if (item.kind === 'featuredRound' && item.gameId) {
+      onSelectGame(item.gameId);
+    } else if (item.kind === 'event' && onSelectEvents) {
+      onSelectEvents();
+    }
+  };
+
+  const handleOpenSettings = () => {
+    setOpen(false);
+    onOpenNotificationSettings?.();
+  };
+
   const adminCoverReports = isAdmin ? coverReportNotifications : [];
-  const totalNotifications = commentNotifications.length + adminCoverReports.length;
+  const totalNotifications =
+    commentNotifications.length +
+    adminCoverReports.length +
+    groupNotifications.length;
+  const allCategoriesMuted =
+    !notificationPreferences.comments &&
+    !notificationPreferences.mentions &&
+    !notificationPreferences.featuredRound &&
+    !notificationPreferences.events &&
+    (!isAdmin || !notificationPreferences.coverReports);
 
   return (
     <>
@@ -143,28 +188,61 @@ export function NotificationsBell({
                 )}
               </div>
 
-              {unreadNotificationCount > 0 && (
-                <button
-                  type="button"
-                  onClick={markAllNotificationsRead}
-                  className="inline-flex items-center gap-1 text-[11px] font-medium text-[#4ADE80] hover:underline cursor-pointer"
-                >
-                  <CheckCheck className="w-3.5 h-3.5" />
-                  <span>Marcar lidas</span>
-                </button>
-              )}
+              <div className="flex items-center gap-2.5 shrink-0">
+                {unreadNotificationCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={markAllNotificationsRead}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-[#4ADE80] hover:underline cursor-pointer"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    <span>Marcar lidas</span>
+                  </button>
+                )}
+                {onOpenNotificationSettings && (
+                  <button
+                    type="button"
+                    onClick={handleOpenSettings}
+                    title="Preferências de notificação"
+                    aria-label="Abrir preferências de notificação"
+                    className="p-1 text-[#8C9288] hover:text-[#F2F2EE] rounded transition-colors cursor-pointer"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
             {totalNotifications === 0 ? (
-              <div className="px-5 py-8 text-center space-y-2">
-                <MessageSquare className="w-5 h-5 text-[#4B5148] mx-auto" />
-                <p className="text-xs text-[#90968C] leading-relaxed">
-                  Nenhuma notificação por enquanto. Quando outros membros comentarem
-                  em uma avaliação sua, responderem um comentário seu, mencionarem
-                  você com @nome
-                  {isAdmin ? ' ou reportarem uma capa incorreta' : ''}, ela aparecerá
-                  aqui em tempo real.
-                </p>
+              <div className="px-5 py-8 text-center space-y-2.5">
+                {allCategoriesMuted ? (
+                  <>
+                    <BellOff className="w-5 h-5 text-[#5D635A] mx-auto" />
+                    <p className="text-xs text-[#90968C] leading-relaxed">
+                      Todas as categorias de notificação estão desativadas nas suas
+                      preferências.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <MessageSquare className="w-5 h-5 text-[#4B5148] mx-auto" />
+                    <p className="text-xs text-[#90968C] leading-relaxed">
+                      Nenhuma notificação por enquanto. Novos comentários, menções,
+                      Jogos da Rodada e atualizações de eventos ativados nas suas
+                      preferências aparecerão aqui em tempo real.
+                    </p>
+                  </>
+                )}
+                {onOpenNotificationSettings && (
+                  <button
+                    type="button"
+                    onClick={handleOpenSettings}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4ADE80] hover:underline cursor-pointer pt-1"
+                  >
+                    <SlidersHorizontal className="w-3 h-3" />
+                    <span>Gerenciar preferências</span>
+                  </button>
+                )}
               </div>
             ) : (
               <div className="max-h-[420px] overflow-y-auto divide-y divide-[#202420]">
@@ -254,6 +332,63 @@ export function NotificationsBell({
                               </span>
                             </button>
                           </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Group Highlights: Jogo da Rodada & Events */}
+                {groupNotifications.length > 0 && (
+                  <div>
+                    <div className="px-4 py-2 bg-[#121914] border-b border-[#1E2B22] flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-[#4ADE80]">
+                        Rodada &amp; Eventos ({groupNotifications.length})
+                      </span>
+                    </div>
+                    <ul className="divide-y divide-[#202420]">
+                      {groupNotifications.slice(0, 12).map((item) => (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenGroupNotification(item)}
+                            className={`w-full px-4 py-3 text-left flex items-start gap-3 transition-colors cursor-pointer ${
+                              item.unread
+                                ? 'bg-[#151D17] hover:bg-[#1B261E]'
+                                : 'hover:bg-[#191D19]'
+                            }`}
+                          >
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 border ${
+                                item.kind === 'featuredRound'
+                                  ? 'bg-[#14261B] border-[#255436] text-[#4ADE80]'
+                                  : 'bg-[#171E29] border-[#2B3E5E] text-[#60A5FA]'
+                              }`}
+                            >
+                              {item.kind === 'featuredRound' ? (
+                                <Pin className="w-3.5 h-3.5" />
+                              ) : (
+                                <Trophy className="w-3.5 h-3.5" />
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <p className="text-xs font-semibold text-[#F2F2EE] leading-snug">
+                                {item.title}
+                              </p>
+                              <p className="text-xs text-[#8C9288] line-clamp-2 break-words">
+                                {item.subtitle}
+                              </p>
+                              <p className="text-[11px] text-[#6E736B]">
+                                {formatTimestamp(item.createdAt)}
+                              </p>
+                            </div>
+                            {item.unread && (
+                              <span
+                                className="w-2 h-2 rounded-full bg-[#4ADE80] mt-1.5 shrink-0"
+                                aria-label="Não lida"
+                              />
+                            )}
+                          </button>
                         </li>
                       ))}
                     </ul>
@@ -435,6 +570,53 @@ export function NotificationsBell({
           </button>
         </div>
       )}
+
+      {/* Live real-time toast for Jogo da Rodada or Event updates */}
+      {latestLiveGroupNotification &&
+        !latestLiveNotification &&
+        !(isAdmin && latestLiveCoverReport) && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-5 right-5 z-50 max-w-sm w-[calc(100vw-2.5rem)] bg-[#141915] border border-[#2C4A34] rounded-md shadow-2xl p-3.5 flex items-start gap-3"
+          >
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border ${
+                latestLiveGroupNotification.kind === 'featuredRound'
+                  ? 'bg-[#14261B] border-[#255436] text-[#4ADE80]'
+                  : 'bg-[#171E29] border-[#2B3E5E] text-[#60A5FA]'
+              }`}
+            >
+              {latestLiveGroupNotification.kind === 'featuredRound' ? (
+                <Pin className="w-3.5 h-3.5" />
+              ) : (
+                <Trophy className="w-3.5 h-3.5" />
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                handleOpenGroupNotification(latestLiveGroupNotification)
+              }
+              className="min-w-0 flex-1 text-left space-y-0.5 cursor-pointer"
+            >
+              <p className="text-xs font-semibold text-[#F2F2EE] leading-snug">
+                {latestLiveGroupNotification.title}
+              </p>
+              <p className="text-xs text-[#8C9288] truncate">
+                {latestLiveGroupNotification.subtitle}
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={dismissLiveGroupNotification}
+              aria-label="Fechar aviso"
+              className="p-1 text-[#787D75] hover:text-[#F2F2EE] transition-colors shrink-0 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
     </>
   );
 }

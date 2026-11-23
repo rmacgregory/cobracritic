@@ -94,6 +94,22 @@ service cloud.firestore {
         cat.winnerNomineeId is string && cat.winnerNomineeId.size() <= 128;
     }
 
+    function isValidNotificationPreferences(prefs) {
+      return prefs is map &&
+        prefs.keys().hasAll([
+          'comments', 'mentions', 'featuredRound', 'events', 'coverReports', 'liveToasts'
+        ]) &&
+        prefs.keys().hasOnly([
+          'comments', 'mentions', 'featuredRound', 'events', 'coverReports', 'liveToasts'
+        ]) &&
+        prefs.comments is bool &&
+        prefs.mentions is bool &&
+        prefs.featuredRound is bool &&
+        prefs.events is bool &&
+        prefs.coverReports is bool &&
+        prefs.liveToasts is bool;
+    }
+
     // ---------------------------------------------------------
     // Entity Validation Blueprints (Anti-Update-Gap)
     // ---------------------------------------------------------
@@ -104,7 +120,7 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'uid', 'displayName', 'photoURL', 'bio', 'topFiveGames', 'favoriteGenre',
-          'visibility', 'createdAt', 'updatedAt'
+          'notificationPreferences', 'visibility', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.uid) &&
         data.uid == userId &&
@@ -114,6 +130,7 @@ service cloud.firestore {
         data.bio is string && data.bio.size() <= 240 &&
         isValidTopFiveGames(data.topFiveGames) &&
         (!('favoriteGenre' in data) || (data.favoriteGenre is string && data.favoriteGenre.size() <= 40)) &&
+        (!('notificationPreferences' in data) || isValidNotificationPreferences(data.notificationPreferences)) &&
         data.visibility is string && data.visibility == 'group' &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -430,7 +447,8 @@ service cloud.firestore {
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
         incoming().diff(existing()).affectedKeys().hasOnly([
-          'displayName', 'photoURL', 'bio', 'topFiveGames', 'favoriteGenre', 'updatedAt'
+          'displayName', 'photoURL', 'bio', 'topFiveGames', 'favoriteGenre',
+          'notificationPreferences', 'updatedAt'
         ]) &&
         canMemberWrite();
       allow delete: if false;

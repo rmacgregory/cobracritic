@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   Gamepad2,
+  Home,
   LayoutGrid,
   LogOut,
   MessageSquareText,
@@ -293,6 +294,7 @@ export function Sidebar({
     icon: typeof LayoutGrid;
     count?: number;
   }[] = [
+    { id: 'home', label: 'Início', icon: Home },
     { id: 'catalog', label: 'Catálogo', icon: LayoutGrid, count: gamesWithStats.length },
     { id: 'feed', label: 'Feed Social', icon: MessageSquareText, count: reviews.length },
     {
@@ -341,8 +343,8 @@ export function Sidebar({
       <div className="h-16 px-4 border-b border-[#232723] flex items-center justify-between gap-2 shrink-0">
         <button
           type="button"
-          onClick={() => handleNavClick('catalog')}
-          aria-label="CobraCritic — Ir para o catálogo"
+          onClick={() => handleNavClick('home')}
+          aria-label="CobraCritic — Ir para a tela inicial"
           className="flex items-center min-w-0 flex-1 cursor-pointer focus:outline-none"
         >
           <img

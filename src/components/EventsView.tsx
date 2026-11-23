@@ -49,6 +49,8 @@ import { ShareCardModal } from './ShareCardModal';
 interface EventsViewProps {
   onSelectGame: (gameId: string) => void;
   onSelectMember: (uid: string) => void;
+  initialEventId?: string | null;
+  onClearInitialEvent?: () => void;
 }
 
 const QUICK_CATEGORY_SUGGESTIONS = [
@@ -747,7 +749,12 @@ function CloseEventModal({
   );
 }
 
-export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
+export function EventsView({
+  onSelectGame,
+  onSelectMember,
+  initialEventId,
+  onClearInitialEvent,
+}: EventsViewProps) {
   const {
     user,
     isAdmin,
@@ -784,8 +791,19 @@ export function EventsView({ onSelectGame, onSelectMember }: EventsViewProps) {
     return [...filtered].sort((a, b) => priority[a.status] - priority[b.status]);
   }, [events, isAdmin]);
 
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(
+    initialEventId ?? null,
+  );
   const [viewMode, setViewMode] = useState<'public' | 'builder'>('public');
+
+  useEffect(() => {
+    if (!initialEventId) return;
+    if (visibleEvents.some((ev) => ev.id === initialEventId)) {
+      setSelectedEventId(initialEventId);
+      setViewMode('public');
+      onClearInitialEvent?.();
+    }
+  }, [initialEventId, visibleEvents, onClearInitialEvent]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showShareEventModal, setShowShareEventModal] = useState(false);

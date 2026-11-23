@@ -32,6 +32,10 @@
           "type": "array",
           "description": "Member's Top 5 all-time favorite games (0 to 5 strings, max 120 chars each)."
         },
+        "notificationPreferences": {
+          "type": "object",
+          "description": "Optional per-user notification toggles (comments, mentions, featuredRound, events, coverReports, liveToasts booleans)."
+        },
         "visibility": {
           "type": "string",
           "enum": ["group"],

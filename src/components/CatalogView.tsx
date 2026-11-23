@@ -14,12 +14,10 @@ import {
   GAME_PLAY_STATUS_META,
   GENRES,
   PLATFORMS,
-  formatReleaseDate,
   getScoreMeta,
   type GamePlayStatus,
   type GameWithStats,
 } from '../types';
-import { FeaturedRoundBanner } from './FeaturedRoundBanner';
 import { GameCover } from './GameCover';
 import { ScoreBadge } from './ScoreBadge';
 
@@ -96,23 +94,6 @@ export function CatalogView({
       years.add(g.releaseYear);
     }
     return Array.from(years).sort((a, b) => b - a);
-  }, [gamesWithStats]);
-
-  const featuredGame = useMemo(() => {
-    if (gamesWithStats.length === 0) return null;
-    const rated = gamesWithStats.filter((g) => g.weightedScore !== null);
-    if (rated.length > 0) {
-      return [...rated].sort((a, b) => {
-        if ((b.weightedScore ?? -1) !== (a.weightedScore ?? -1)) {
-          return (b.weightedScore ?? -1) - (a.weightedScore ?? -1);
-        }
-        if (b.reviewCount !== a.reviewCount) {
-          return b.reviewCount - a.reviewCount;
-        }
-        return (b.averageScore ?? -1) - (a.averageScore ?? -1);
-      })[0];
-    }
-    return gamesWithStats[0];
   }, [gamesWithStats]);
 
   const filteredGames = useMemo(() => {
@@ -287,143 +268,18 @@ export function CatalogView({
   }
 
   return (
-    <main className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-9">
-      <FeaturedRoundBanner
-        onSelectGame={onSelectGame}
-        onOpenReview={onOpenReview}
-      />
-
-      {/* Editorial Spotlight Hero (hidden when filtering by sidebar category so results are immediate) */}
-      {featuredGame && !hasActiveFilters && (
-        <section
-          aria-label="Destaque dos Cobras"
-          className="border-b border-[#232723] pb-8"
-        >
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
-            <div className="lg:col-span-3 max-w-[190px] lg:max-w-[220px] w-full">
-              <button
-                type="button"
-                onClick={() => onSelectGame(featuredGame.id)}
-                className="block w-full text-left group cursor-pointer transition-transform duration-300 ease-out hover:scale-[1.02] will-change-transform motion-reduce:transform-none"
-              >
-                <GameCover
-                  title={featuredGame.title}
-                  developer={featuredGame.developer}
-                  releaseYear={featuredGame.releaseYear}
-                  coverUrl={featuredGame.coverUrl}
-                  className="transition-all duration-300 ease-out group-hover:border-[#3A433A] group-hover:shadow-[0_12px_28px_-14px_rgba(0,0,0,0.85)]"
-                />
-              </button>
-            </div>
-
-            <div className="lg:col-span-9 flex flex-col justify-between gap-5">
-              <div className="space-y-3">
-                <p className="text-xs font-medium text-[#4ADE80]">
-                  {featuredGame.averageScore !== null
-                    ? 'Top 1 dos Cobras (nota + volume)'
-                    : 'Recém-adicionado ao catálogo'}
-                  {' · '}
-                  <span className="text-[#90968C] font-normal">
-                    {formatReleaseDate(featuredGame.releaseDate)}
-                  </span>
-                </p>
-
-                <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#F2F2EE] leading-[1.12]">
-                  {featuredGame.title}
-                </h1>
-
-                <p className="text-sm text-[#90968C]">
-                  <span>{featuredGame.developer}</span>
-                  <span aria-hidden="true"> · </span>
-                  <span>{featuredGame.genres.join(', ')}</span>
-                  <span aria-hidden="true"> · </span>
-                  <span>{featuredGame.platforms.join(' / ')}</span>
-                </p>
-
-                <p className="text-[15px] sm:text-base text-[#C8CBC4] leading-relaxed max-w-2xl">
-                  {featuredGame.synopsis}
-                </p>
-              </div>
-
-              <div className="space-y-6 pt-4 border-t border-[#222622]">
-                <div className="flex flex-wrap items-center justify-between gap-6">
-                  <ScoreBadge
-                    score={featuredGame.averageScore}
-                    size="lg"
-                    showLabel
-                    reviewCount={featuredGame.reviewCount}
-                  />
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => onOpenReview(featuredGame)}
-                      className="px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      Avaliar este jogo
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onSelectGame(featuredGame.id)}
-                      className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border border-[#2F352F] bg-[#141614] text-[#F2F2EE] rounded-md hover:border-[#666B63] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      <span>Ver críticas</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-
-                {featuredGame.reviewCount > 0 && (
-                  <div className="space-y-2 max-w-xl">
-                    <div className="h-2 w-full bg-[#222622] overflow-hidden flex">
-                      {featuredGame.positiveCount > 0 && (
-                        <div
-                          className="bg-[#16A34A] h-full"
-                          style={{
-                            width: `${(featuredGame.positiveCount / featuredGame.reviewCount) * 100}%`,
-                          }}
-                        />
-                      )}
-                      {featuredGame.mixedCount > 0 && (
-                        <div
-                          className="bg-[#D97706] h-full"
-                          style={{
-                            width: `${(featuredGame.mixedCount / featuredGame.reviewCount) * 100}%`,
-                          }}
-                        />
-                      )}
-                      {featuredGame.negativeCount > 0 && (
-                        <div
-                          className="bg-[#DC2626] h-full"
-                          style={{
-                            width: `${(featuredGame.negativeCount / featuredGame.reviewCount) * 100}%`,
-                          }}
-                        />
-                      )}
-                    </div>
-                    <p className="text-xs text-[#90968C] tabular-nums">
-                      {featuredGame.positiveCount} favoráveis · {featuredGame.mixedCount}{' '}
-                      mistas · {featuredGame.negativeCount} desfavoráveis
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
+    <main className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       {/* Filter & Catalog Section */}
       <section aria-label="Catálogo completo" className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="font-display text-2xl sm:text-3xl font-semibold text-[#F2F2EE]">
+            <h1 className="font-display text-2xl sm:text-3xl font-semibold text-[#F2F2EE]">
               {selectedGenre !== 'all'
                 ? `Jogos de ${selectedGenre}`
                 : selectedPlatform !== 'all'
                   ? `Jogos em ${selectedPlatform}`
                   : 'Catálogo dos Cobras'}
-            </h2>
+            </h1>
             <p className="text-sm text-[#90968C] mt-1 tabular-nums">
               {filteredGames.length} de {gamesWithStats.length}{' '}
               {gamesWithStats.length === 1 ? 'jogo' : 'jogos'} exibidos · {reviews.length}{' '}

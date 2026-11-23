@@ -8,6 +8,7 @@ import { EventsView } from './components/EventsView';
 import { GameDetailView } from './components/GameDetailView';
 import { GameFormModal } from './components/GameFormModal';
 import { GlobalSearchBar } from './components/GlobalSearchBar';
+import { HomeView } from './components/HomeView';
 import { MembersView } from './components/MembersView';
 import { NotificationsBell } from './components/NotificationsBell';
 import { ProfileView } from './components/ProfileView';
@@ -51,13 +52,17 @@ function CobraCriticShell() {
     deleteReview,
   } = useVeredito();
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('catalog');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('home');
   const [selectedGameId, setSelectedGameId] = useState<string | null>(null);
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [selectedGenre, setSelectedGenre] = useState<string>('all');
   const [selectedPlatform, setSelectedPlatform] = useState<string>('all');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [copiedUid, setCopiedUid] = useState(false);
+  const [profileFocusSection, setProfileFocusSection] = useState<
+    'notifications' | null
+  >(null);
+  const [initialEventId, setInitialEventId] = useState<string | null>(null);
 
   const [showGameModal, setShowGameModal] = useState(false);
   const [editingGame, setEditingGame] = useState<Game | null>(null);
@@ -111,6 +116,21 @@ function CobraCriticShell() {
     setActiveTab('members');
     setSelectedGameId(null);
     setSelectedMemberId(memberUid);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleOpenNotificationSettings = () => {
+    setSelectedGameId(null);
+    setSelectedMemberId(null);
+    setActiveTab('profile');
+    setProfileFocusSection('notifications');
+  };
+
+  const handleGoToEvents = (eventId?: string) => {
+    setSelectedGameId(null);
+    setSelectedMemberId(null);
+    setInitialEventId(eventId ?? null);
+    setActiveTab('events');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -259,6 +279,7 @@ function CobraCriticShell() {
   }
 
   const tabLabels: Record<ActiveTab, string> = {
+    home: 'Início',
     catalog: 'Catálogo',
     feed: 'Feed Social',
     events: 'Eventos',
@@ -270,7 +291,7 @@ function CobraCriticShell() {
   };
 
   const effectiveTab: ActiveTab =
-    activeTab === 'admin' && !isAdmin ? 'catalog' : activeTab;
+    activeTab === 'admin' && !isAdmin ? 'home' : activeTab;
 
   const breadcrumbTrail: string[] = [tabLabels[effectiveTab]];
   if (selectedGame) {
@@ -379,6 +400,8 @@ function CobraCriticShell() {
             <NotificationsBell
               onSelectGame={handleSelectGame}
               onEditGame={handleOpenEditGame}
+              onSelectEvents={() => handleSelectTab('events')}
+              onOpenNotificationSettings={handleOpenNotificationSettings}
             />
 
             <button
@@ -402,6 +425,16 @@ function CobraCriticShell() {
               onEditGame={handleOpenEditGame}
               onSelectAuthor={(uid) => handleSelectMember(uid)}
             />
+          ) : effectiveTab === 'home' ? (
+            <HomeView
+              onSelectGame={handleSelectGame}
+              onSelectMember={(uid) => handleSelectMember(uid)}
+              onOpenReview={(g) => handleOpenReview(g)}
+              onOpenNewGame={handleOpenNewGame}
+              onGoToCatalog={() => handleSelectTab('catalog')}
+              onGoToFeed={() => handleSelectTab('feed')}
+              onGoToEvents={handleGoToEvents}
+            />
           ) : effectiveTab === 'catalog' ? (
             <CatalogView
               selectedPlatform={selectedPlatform}
@@ -424,6 +457,8 @@ function CobraCriticShell() {
             <EventsView
               onSelectGame={handleSelectGame}
               onSelectMember={(uid) => handleSelectMember(uid)}
+              initialEventId={initialEventId}
+              onClearInitialEvent={() => setInitialEventId(null)}
             />
           ) : effectiveTab === 'ranking' ? (
             <RankingView
@@ -452,6 +487,8 @@ function CobraCriticShell() {
             <ProfileView
               onSelectGame={handleSelectGame}
               onEditReview={(game, rev) => handleOpenReview(game, rev)}
+              focusSection={profileFocusSection}
+              onClearFocusSection={() => setProfileFocusSection(null)}
             />
           )}
         </div>
