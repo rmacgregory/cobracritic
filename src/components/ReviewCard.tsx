@@ -294,32 +294,72 @@ export function ReviewCard({
                 const canDeleteComment = Boolean(
                   user && (comment.authorId === user.uid || isAdmin),
                 );
+                const liveCommenter = membersById[comment.authorId];
+                const commentAuthorName =
+                  liveCommenter?.displayName || comment.authorName;
+                const commentAuthorPhoto =
+                  liveCommenter?.photoURL || comment.authorPhotoURL;
+                const commentInitials = commentAuthorName
+                  .split(' ')
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((p) => p[0])
+                  .join('')
+                  .toUpperCase();
+
+                const avatarNode = commentAuthorPhoto ? (
+                  <img
+                    src={commentAuthorPhoto}
+                    alt={commentAuthorName}
+                    referrerPolicy="no-referrer"
+                    className="w-6 h-6 rounded-full object-cover border border-[#2C312C] shrink-0"
+                  />
+                ) : (
+                  <div className="w-6 h-6 rounded-full bg-[#222622] border border-[#2C312C] text-[#F2F2EE] text-[10px] font-semibold flex items-center justify-center shrink-0">
+                    {commentInitials || '?'}
+                  </div>
+                );
+
                 return (
                   <li
                     key={comment.id}
                     className="flex items-start justify-between gap-3 text-sm"
                   >
-                    <div className="min-w-0 space-y-0.5">
-                      <p className="text-xs text-[#8C9288]">
-                        {onSelectAuthor ? (
-                          <button
-                            type="button"
-                            onClick={() => onSelectAuthor(comment.authorId)}
-                            className="font-semibold text-[#F2F2EE] hover:text-[#4ADE80] cursor-pointer"
-                          >
-                            {comment.authorName}
-                          </button>
-                        ) : (
-                          <span className="font-semibold text-[#F2F2EE]">
-                            {comment.authorName}
-                          </span>
-                        )}
-                        <span aria-hidden="true"> · </span>
-                        <span>{formatTimestamp(comment.createdAt)}</span>
-                      </p>
-                      <p className="text-sm text-[#C8CBC4] leading-relaxed break-words">
-                        {comment.body}
-                      </p>
+                    <div className="flex items-start gap-2.5 min-w-0">
+                      {onSelectAuthor ? (
+                        <button
+                          type="button"
+                          onClick={() => onSelectAuthor(comment.authorId)}
+                          aria-label={`Ver perfil de ${commentAuthorName}`}
+                          className="mt-0.5 shrink-0 rounded-full cursor-pointer hover:opacity-90 transition-opacity"
+                        >
+                          {avatarNode}
+                        </button>
+                      ) : (
+                        <div className="mt-0.5 shrink-0">{avatarNode}</div>
+                      )}
+                      <div className="min-w-0 space-y-0.5">
+                        <p className="text-xs text-[#8C9288] flex flex-wrap items-center gap-x-1.5">
+                          {onSelectAuthor ? (
+                            <button
+                              type="button"
+                              onClick={() => onSelectAuthor(comment.authorId)}
+                              className="font-semibold text-[#F2F2EE] hover:text-[#4ADE80] transition-colors cursor-pointer"
+                            >
+                              {commentAuthorName}
+                            </button>
+                          ) : (
+                            <span className="font-semibold text-[#F2F2EE]">
+                              {commentAuthorName}
+                            </span>
+                          )}
+                          <span aria-hidden="true">·</span>
+                          <span>{formatTimestamp(comment.createdAt)}</span>
+                        </p>
+                        <p className="text-sm text-[#C8CBC4] leading-relaxed break-words">
+                          {comment.body}
+                        </p>
+                      </div>
                     </div>
                     {canDeleteComment && (
                       <button

@@ -2,7 +2,7 @@ import { getScoreMeta } from '../types';
 
 interface ScoreBadgeProps {
   score: number | null;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   showLabel?: boolean;
   reviewCount?: number;
 }
@@ -17,6 +17,7 @@ export function ScoreBadge({
   const displayValue = score === null ? '—' : String(Math.round(score));
 
   const boxSizeClasses = {
+    xs: 'w-7 h-7 text-xs',
     sm: 'w-9 h-9 text-sm',
     md: 'w-12 h-12 text-lg',
     lg: 'w-16 h-16 text-2xl',

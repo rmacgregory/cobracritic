@@ -175,13 +175,13 @@ export function CatalogView({
 
   if (dataLoading) {
     return (
-      <div className="max-w-[1140px] mx-auto px-4 sm:px-8 py-8 space-y-10">
-        <div className="h-72 bg-[#161916] animate-pulse" />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {[1, 2, 3, 4].map((n) => (
-            <div key={n} className="space-y-3">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+        <div className="h-56 bg-[#161916] animate-pulse" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+          {[1, 2, 3, 4, 5, 6].map((n) => (
+            <div key={n} className="space-y-2.5">
               <div className="aspect-[3/4] bg-[#161916] animate-pulse" />
-              <div className="h-4 w-3/4 bg-[#161916] animate-pulse" />
+              <div className="h-3.5 w-3/4 bg-[#161916] animate-pulse" />
               <div className="h-3 w-1/2 bg-[#161916] animate-pulse" />
             </div>
           ))}
@@ -228,15 +228,15 @@ export function CatalogView({
   }
 
   return (
-    <main className="max-w-[1140px] mx-auto px-4 sm:px-8 py-8 space-y-12">
+    <main className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-9">
       {/* Editorial Spotlight Hero (hidden when filtering by sidebar category so results are immediate) */}
       {featuredGame && !hasActiveFilters && (
         <section
           aria-label="Destaque dos Cobras"
-          className="border-b border-[#232723] pb-12"
+          className="border-b border-[#232723] pb-8"
         >
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-stretch">
-            <div className="lg:col-span-4 max-w-[260px] lg:max-w-none w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-stretch">
+            <div className="lg:col-span-3 max-w-[190px] lg:max-w-[220px] w-full">
               <button
                 type="button"
                 onClick={() => onSelectGame(featuredGame.id)}
@@ -251,8 +251,8 @@ export function CatalogView({
               </button>
             </div>
 
-            <div className="lg:col-span-8 flex flex-col justify-between gap-6">
-              <div className="space-y-4">
+            <div className="lg:col-span-9 flex flex-col justify-between gap-5">
+              <div className="space-y-3">
                 <p className="text-xs font-mono uppercase tracking-[0.15em] text-[#4ADE80]">
                   {featuredGame.averageScore !== null
                     ? 'Maior média dos Cobras'
@@ -263,7 +263,7 @@ export function CatalogView({
                   </span>
                 </p>
 
-                <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-medium tracking-tight text-[#F2F2EE] leading-[1.1]">
+                <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-medium tracking-tight text-[#F2F2EE] leading-[1.12]">
                   {featuredGame.title}
                 </h1>
 
@@ -542,15 +542,15 @@ export function CatalogView({
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-10">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-7">
             {filteredGames.map((game) => {
               const scoreMeta = getScoreMeta(game.averageScore);
               return (
                 <article
                   key={game.id}
-                  className="group flex flex-col justify-between space-y-3"
+                  className="group flex flex-col justify-between space-y-2.5"
                 >
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     <button
                       type="button"
                       onClick={() => onSelectGame(game.id)}
@@ -561,38 +561,37 @@ export function CatalogView({
                         developer={game.developer}
                         releaseYear={game.releaseYear}
                         coverUrl={game.coverUrl}
+                        compact
                       />
                     </button>
 
-                    <div className="flex items-start justify-between gap-3 pt-1">
+                    <div className="flex items-start justify-between gap-2 pt-0.5">
                       <div className="min-w-0">
                         <button
                           type="button"
                           onClick={() => onSelectGame(game.id)}
-                          className="font-serif text-lg font-medium text-[#F2F2EE] leading-snug group-hover:text-[#4ADE80] transition-colors text-left cursor-pointer line-clamp-2"
+                          className="font-serif text-sm font-medium text-[#F2F2EE] leading-snug group-hover:text-[#4ADE80] transition-colors text-left cursor-pointer line-clamp-2"
                         >
                           {game.title}
                         </button>
-                        <p className="text-xs text-[#90968C] mt-1 truncate">
-                          {game.developer} · {formatReleaseDate(game.releaseDate)}
+                        <p className="text-[11px] text-[#90968C] mt-0.5 truncate">
+                          {game.developer} · {game.releaseYear}
                         </p>
                       </div>
-                      <ScoreBadge score={game.averageScore} size="sm" />
+                      <ScoreBadge score={game.averageScore} size="xs" />
                     </div>
 
-                    <div className="space-y-1 text-xs text-[#8C9288]">
+                    <div className="space-y-0.5 text-[11px] text-[#8C9288]">
                       <p className="truncate">{game.platforms.join(' · ')}</p>
                       <p className="truncate text-[#6E736B]">{game.genres.join(' / ')}</p>
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-[#222622] flex items-center justify-between gap-2 text-xs">
-                    <span className={`font-medium ${scoreMeta.accentTextClass}`}>
+                  <div className="pt-2 border-t border-[#222622] flex items-center justify-between gap-2 text-[11px]">
+                    <span className={`font-medium truncate ${scoreMeta.accentTextClass}`}>
                       {game.reviewCount === 0
                         ? 'Sem notas'
-                        : `${scoreMeta.shortLabel} · ${game.reviewCount} ${
-                            game.reviewCount === 1 ? 'nota' : 'notas'
-                          }`}
+                        : `${scoreMeta.shortLabel} · ${game.reviewCount}`}
                     </span>
                     <button
                       type="button"
