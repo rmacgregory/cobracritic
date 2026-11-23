@@ -29,6 +29,12 @@ export function ReviewFormModal({
     game.platforms.length > 0 ? game.platforms : [...PLATFORMS];
 
   const [score, setScore] = useState<number>(existingReview?.score ?? 80);
+  const [ratingOnly, setRatingOnly] = useState<boolean>(
+    Boolean(
+      existingReview?.ratingOnly ||
+        (existingReview && !existingReview.headline.trim() && !existingReview.body.trim()),
+    ),
+  );
   const [headline, setHeadline] = useState(existingReview?.headline || '');
   const [body, setBody] = useState(existingReview?.body || '');
   const [platformPlayed, setPlatformPlayed] = useState(
@@ -58,13 +64,15 @@ export function ReviewFormModal({
     e.preventDefault();
     setError(null);
 
-    if (headline.trim().length < LIMITS.HEADLINE_MIN) {
-      setError('Escreva um título curto para o seu veredito (mín. 2 caracteres).');
-      return;
-    }
-    if (body.trim().length < LIMITS.REVIEW_BODY_MIN) {
-      setError('Escreva uma crítica com pelo menos 10 caracteres.');
-      return;
+    if (!ratingOnly) {
+      if (headline.trim().length < LIMITS.HEADLINE_MIN) {
+        setError('Escreva um título curto para o seu veredito (mín. 2 caracteres) ou marque "Dar apenas nota".');
+        return;
+      }
+      if (body.trim().length < LIMITS.REVIEW_BODY_MIN) {
+        setError('Escreva uma crítica com pelo menos 10 caracteres ou marque "Dar apenas nota".');
+        return;
+      }
     }
 
     const parsedHours = hoursPlayed.trim() === '' ? 0 : Number(hoursPlayed);
@@ -77,14 +85,15 @@ export function ReviewFormModal({
     try {
       await onSubmit({
         score,
-        headline: headline.trim(),
-        body: body.trim(),
+        ratingOnly,
+        headline: ratingOnly ? '' : headline.trim(),
+        body: ratingOnly ? '' : body.trim(),
         platformPlayed,
         hoursPlayed: parsedHours,
       });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao salvar sua crítica.');
+      setError(err instanceof Error ? err.message : 'Erro ao salvar sua avaliação.');
     } finally {
       setSaving(false);
     }
@@ -118,7 +127,7 @@ export function ReviewFormModal({
               id="review-modal-title"
               className="font-serif text-xl font-semibold text-[#F2F2EE]"
             >
-              {existingReview ? 'Editar minha crítica' : 'Publicar nota e crítica'}
+              {existingReview ? 'Editar minha avaliação' : 'Publicar nota e crítica'}
             </h2>
           </div>
           <button
@@ -217,45 +226,79 @@ export function ReviewFormModal({
             </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="review-headline"
-              className="block text-xs font-medium text-[#A8ACA5] mb-1.5"
-            >
-              Título da crítica ({headline.length}/{LIMITS.HEADLINE_MAX})
-            </label>
+          {/* Option: Rating Only */}
+          <label
+            htmlFor="review-rating-only"
+            className={`flex items-start gap-3 p-3.5 rounded-md border transition-colors cursor-pointer select-none ${
+              ratingOnly
+                ? 'bg-[#122117] border-[#2C613D]'
+                : 'bg-[#0C0D0C] border-[#262A26] hover:border-[#3A403A]'
+            }`}
+          >
             <input
-              id="review-headline"
-              type="text"
-              required
-              minLength={LIMITS.HEADLINE_MIN}
-              maxLength={LIMITS.HEADLINE_MAX}
-              value={headline}
-              onChange={(e) => setHeadline(e.target.value)}
-              placeholder="Ex.: Combate impecável, mas o ato final perde o ritmo"
-              className="w-full px-3.5 py-2.5 text-sm bg-[#0C0D0C] border border-[#2C312C] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#4ADE80]"
+              id="review-rating-only"
+              type="checkbox"
+              checked={ratingOnly}
+              onChange={(e) => {
+                setRatingOnly(e.target.checked);
+                setError(null);
+              }}
+              className="mt-0.5 w-4 h-4 rounded accent-[#4ADE80] cursor-pointer shrink-0"
             />
-          </div>
+            <div className="space-y-0.5">
+              <span className="block text-sm font-medium text-[#F2F2EE]">
+                Dar apenas nota
+              </span>
+              <span className="block text-xs text-[#90968C] leading-relaxed">
+                Publique somente sua pontuação de 0 a 100 sem precisar escrever uma crítica.
+                A ficha exibirá que você optou apenas por dar nota ao jogo.
+              </span>
+            </div>
+          </label>
 
-          <div>
-            <label
-              htmlFor="review-body"
-              className="block text-xs font-medium text-[#A8ACA5] mb-1.5"
-            >
-              Crítica completa ({body.length}/{LIMITS.REVIEW_BODY_MAX})
-            </label>
-            <textarea
-              id="review-body"
-              required
-              rows={6}
-              minLength={LIMITS.REVIEW_BODY_MIN}
-              maxLength={LIMITS.REVIEW_BODY_MAX}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              placeholder="Conte aos Cobras o que funcionou, o que decepcionou e se vale a pena jogar..."
-              className="w-full px-3.5 py-2.5 text-sm bg-[#0C0D0C] border border-[#2C312C] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] leading-relaxed focus:outline-none focus:border-[#4ADE80]"
-            />
-          </div>
+          {!ratingOnly && (
+            <>
+              <div>
+                <label
+                  htmlFor="review-headline"
+                  className="block text-xs font-medium text-[#A8ACA5] mb-1.5"
+                >
+                  Título da crítica ({headline.length}/{LIMITS.HEADLINE_MAX})
+                </label>
+                <input
+                  id="review-headline"
+                  type="text"
+                  required
+                  minLength={LIMITS.HEADLINE_MIN}
+                  maxLength={LIMITS.HEADLINE_MAX}
+                  value={headline}
+                  onChange={(e) => setHeadline(e.target.value)}
+                  placeholder="Ex.: Combate impecável, mas o ato final perde o ritmo"
+                  className="w-full px-3.5 py-2.5 text-sm bg-[#0C0D0C] border border-[#2C312C] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#4ADE80]"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="review-body"
+                  className="block text-xs font-medium text-[#A8ACA5] mb-1.5"
+                >
+                  Crítica completa ({body.length}/{LIMITS.REVIEW_BODY_MAX})
+                </label>
+                <textarea
+                  id="review-body"
+                  required
+                  rows={6}
+                  minLength={LIMITS.REVIEW_BODY_MIN}
+                  maxLength={LIMITS.REVIEW_BODY_MAX}
+                  value={body}
+                  onChange={(e) => setBody(e.target.value)}
+                  placeholder="Conte aos Cobras o que funcionou, o que decepcionou e se vale a pena jogar..."
+                  className="w-full px-3.5 py-2.5 text-sm bg-[#0C0D0C] border border-[#2C312C] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] leading-relaxed focus:outline-none focus:border-[#4ADE80]"
+                />
+              </div>
+            </>
+          )}
 
           {error && (
             <p className="text-sm text-[#F87171]" role="alert">
@@ -293,8 +336,12 @@ export function ReviewFormModal({
                 {saving
                   ? 'Publicando...'
                   : existingReview
-                    ? 'Atualizar crítica'
-                    : 'Publicar crítica'}
+                    ? ratingOnly
+                      ? 'Atualizar nota'
+                      : 'Atualizar crítica'
+                    : ratingOnly
+                      ? 'Publicar nota'
+                      : 'Publicar crítica'}
               </button>
             </div>
           </div>

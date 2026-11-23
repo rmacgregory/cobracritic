@@ -10,6 +10,7 @@ import {
   Search,
   Shield,
   Tag,
+  Trophy,
   User,
   Users,
   X,
@@ -243,6 +244,8 @@ export function Sidebar({
     isMasterAdmin,
     gamesWithStats,
     reviews,
+    events,
+    openCoverReports,
     members,
     bans,
     signOutUser,
@@ -276,6 +279,11 @@ export function Sidebar({
     .join('')
     .toUpperCase();
 
+  const activeEventsCount = useMemo(
+    () => events.filter((ev) => ev.status === 'active').length,
+    [events],
+  );
+
   const navItems: {
     id: ActiveTab;
     label: string;
@@ -284,6 +292,12 @@ export function Sidebar({
   }[] = [
     { id: 'catalog', label: 'Catálogo', icon: LayoutGrid, count: gamesWithStats.length },
     { id: 'feed', label: 'Feed Social', icon: MessageSquareText, count: reviews.length },
+    {
+      id: 'events',
+      label: 'Eventos',
+      icon: Trophy,
+      count: activeEventsCount > 0 ? activeEventsCount : undefined,
+    },
     { id: 'ranking', label: 'Ranking', icon: Award },
     { id: 'members', label: 'Membros', icon: Users, count: members.length },
     { id: 'profile', label: 'Meu Perfil', icon: User },
@@ -293,7 +307,10 @@ export function Sidebar({
             id: 'admin' as const,
             label: 'Painel Admin',
             icon: Shield,
-            count: bans.length > 0 ? bans.length : undefined,
+            count:
+              bans.length + openCoverReports.length > 0
+                ? bans.length + openCoverReports.length
+                : undefined,
           },
         ]
       : []),

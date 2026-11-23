@@ -39,9 +39,16 @@ import {
   LIMITS,
   MASTER_ADMIN_EMAIL,
   STARTER_GAMES,
+  computeWeightedScore,
   sanitizeAvatarUrl,
   sanitizeOptionalUrl,
   type AdminGrant,
+  type CobraEvent,
+  type CoverReport,
+  type EventCategory,
+  type EventNominee,
+  type EventStatus,
+  type EventVote,
   type Game,
   type GameInput,
   type GameWithStats,
@@ -74,6 +81,21 @@ export interface CommentNotification {
   authorFallbackPhotoURL: string;
   body: string;
   createdAt?: ReviewComment['createdAt'];
+  unread: boolean;
+}
+
+export interface CoverReportNotification {
+  id: string;
+  reportId: string;
+  gameId: string;
+  gameTitle: string;
+  gameCoverUrl: string;
+  reporterId: string;
+  reporterName: string;
+  reporterPhotoURL: string;
+  reporterFallbackPhotoURL: string;
+  note: string;
+  createdAt?: CoverReport['createdAt'];
   unread: boolean;
 }
 
@@ -139,14 +161,22 @@ interface VereditoContextValue {
   reviews: Review[];
   comments: ReviewComment[];
   reactions: ReviewReaction[];
+  events: CobraEvent[];
+  eventVotes: EventVote[];
+  coverReports: CoverReport[];
+  openCoverReports: CoverReport[];
+  myOpenCoverReportGameIds: Set<string>;
   commentsByReview: Record<string, ReviewComment[]>;
   reactionsByReview: Record<string, ReviewReaction[]>;
   commentNotifications: CommentNotification[];
+  coverReportNotifications: CoverReportNotification[];
   unreadNotificationCount: number;
   latestLiveNotification: CommentNotification | null;
-  markNotificationRead: (commentId: string) => void;
+  latestLiveCoverReport: CoverReportNotification | null;
+  markNotificationRead: (notifId: string) => void;
   markAllNotificationsRead: () => void;
   dismissLiveNotification: () => void;
+  dismissLiveCoverReport: () => void;
   signInWithGoogle: () => Promise<void>;
   signInWithAdminCredentials: (usernameOrEmail: string, password: string) => Promise<void>;
   signOutUser: () => Promise<void>;
@@ -170,6 +200,30 @@ interface VereditoContextValue {
   banUser: (targetUid: string, displayName: string, reason: string) => Promise<void>;
   unbanUser: (targetUid: string) => Promise<void>;
   purgeMemberContent: (targetUid: string) => Promise<{ reviewsDeleted: number; commentsDeleted: number }>;
+  createEvent: (input: {
+    title: string;
+    description: string;
+    status: EventStatus;
+  }) => Promise<string>;
+  updateEvent: (
+    eventId: string,
+    input: {
+      title: string;
+      description: string;
+      status: EventStatus;
+      categories: EventCategory[];
+    },
+  ) => Promise<void>;
+  deleteEvent: (eventId: string) => Promise<void>;
+  castEventVote: (
+    eventId: string,
+    categoryId: string,
+    nominee: EventNominee,
+  ) => Promise<void>;
+  removeEventVote: (eventId: string, categoryId: string) => Promise<void>;
+  reportIncorrectCover: (game: Game, note?: string) => Promise<void>;
+  resolveCoverReport: (reportId: string) => Promise<void>;
+  deleteCoverReport: (reportId: string) => Promise<void>;
 }
 
 const VereditoContext = createContext<VereditoContextValue | null>(null);
@@ -190,13 +244,19 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [comments, setComments] = useState<ReviewComment[]>([]);
   const [reactions, setReactions] = useState<ReviewReaction[]>([]);
+  const [events, setEvents] = useState<CobraEvent[]>([]);
+  const [eventVotes, setEventVotes] = useState<EventVote[]>([]);
+  const [coverReports, setCoverReports] = useState<CoverReport[]>([]);
   const [notifReadState, setNotifReadState] = useState<NotificationReadState>({
     readIds: [],
     readAllBeforeMs: 0,
   });
   const [liveNotifId, setLiveNotifId] = useState<string | null>(null);
+  const [liveCoverReportId, setLiveCoverReportId] = useState<string | null>(null);
   const seenCommentIdsRef = useRef<Set<string>>(new Set());
   const commentsInitializedRef = useRef(false);
+  const seenCoverReportIdsRef = useRef<Set<string>>(new Set());
+  const coverReportsInitializedRef = useRef(false);
   const myReviewIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
@@ -265,9 +325,15 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         setReviews([]);
         setComments([]);
         setReactions([]);
+        setEvents([]);
+        setEventVotes([]);
+        setCoverReports([]);
         setLiveNotifId(null);
+        setLiveCoverReportId(null);
         seenCommentIdsRef.current = new Set();
         commentsInitializedRef.current = false;
+        seenCoverReportIdsRef.current = new Set();
+        coverReportsInitializedRef.current = false;
       }
     });
 
@@ -403,6 +469,32 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       (err) => handleFirestoreError(err, OperationType.LIST, 'reactions'),
     );
 
+    const unsubEvents = onSnapshot(
+      query(collection(db, 'events'), where('visibility', '==', 'group')),
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<CobraEvent, 'id'>),
+        }));
+        list.sort((a, b) => getTimeMillis(b.createdAt) - getTimeMillis(a.createdAt));
+        setEvents(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'events'),
+    );
+
+    const unsubEventVotes = onSnapshot(
+      query(collection(db, 'eventVotes'), where('visibility', '==', 'group')),
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<EventVote, 'id'>),
+        }));
+        list.sort((a, b) => getTimeMillis(a.createdAt) - getTimeMillis(b.createdAt));
+        setEventVotes(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'eventVotes'),
+    );
+
     return () => {
       unsubUsers();
       unsubAdmins();
@@ -411,6 +503,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       unsubReviews();
       unsubComments();
       unsubReactions();
+      unsubEvents();
+      unsubEventVotes();
     };
   }, [authReady, user]);
 
@@ -461,13 +555,78 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     return isMasterAdmin || adminUids.has(user.uid);
   }, [user, isMasterAdmin, adminUids, isBanned]);
 
+  // Dedicated real-time listener for cover reports:
+  // - Admins receive all group cover reports + live notifications when new ones arrive.
+  // - Regular members only track their own reports (never receive admin alerts).
+  useEffect(() => {
+    if (!authReady || !user) {
+      setCoverReports([]);
+      return;
+    }
+
+    coverReportsInitializedRef.current = false;
+    seenCoverReportIdsRef.current = new Set();
+
+    const reportsQuery = isAdmin
+      ? query(collection(db, 'coverReports'), where('visibility', '==', 'group'))
+      : query(
+          collection(db, 'coverReports'),
+          where('visibility', '==', 'group'),
+          where('reporterId', '==', user.uid),
+        );
+
+    const unsubReports = onSnapshot(
+      reportsQuery,
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<CoverReport, 'id'>),
+        }));
+        list.sort((a, b) => getTimeMillis(b.updatedAt) - getTimeMillis(a.updatedAt));
+
+        if (!coverReportsInitializedRef.current) {
+          seenCoverReportIdsRef.current = new Set(
+            list.filter((r) => r.status === 'open').map((r) => r.id),
+          );
+          coverReportsInitializedRef.current = true;
+        } else if (isAdmin) {
+          for (const change of snap.docChanges()) {
+            const data = change.doc.data() as Omit<CoverReport, 'id'>;
+            const docId = change.doc.id;
+            if (
+              (change.type === 'added' || change.type === 'modified') &&
+              data.status === 'open' &&
+              !seenCoverReportIdsRef.current.has(docId)
+            ) {
+              seenCoverReportIdsRef.current.add(docId);
+              if (data.reporterId !== user.uid) {
+                setLiveCoverReportId(docId);
+              }
+            }
+            if (change.type === 'modified' && data.status === 'resolved') {
+              seenCoverReportIdsRef.current.delete(docId);
+            }
+          }
+        }
+
+        setCoverReports(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'coverReports'),
+    );
+
+    return () => unsubReports();
+  }, [authReady, user, isAdmin]);
+
   const gamesWithStats = useMemo<GameWithStats[]>(() => {
     const reviewsByGame = new Map<string, Review[]>();
+    let totalScoreSum = 0;
     for (const review of reviews) {
+      totalScoreSum += review.score;
       const existing = reviewsByGame.get(review.gameId) || [];
       existing.push(review);
       reviewsByGame.set(review.gameId, existing);
     }
+    const globalMean = reviews.length > 0 ? totalScoreSum / reviews.length : 75;
 
     return games.map((game) => {
       const gameReviews = reviewsByGame.get(game.id) || [];
@@ -477,6 +636,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         return {
           ...game,
           averageScore: null,
+          weightedScore: null,
           reviewCount: 0,
           positiveCount: 0,
           mixedCount: 0,
@@ -491,6 +651,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       const scores = gameReviews.map((r) => r.score);
       const sum = scores.reduce((acc, val) => acc + val, 0);
       const avg = sum / count;
+      const weighted = computeWeightedScore(avg, count, globalMean);
       const variance =
         scores.reduce((acc, val) => acc + Math.pow(val - avg, 2), 0) / count;
       const stdDev = Math.sqrt(variance);
@@ -507,6 +668,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       return {
         ...game,
         averageScore: Math.round(avg),
+        weightedScore: Number(weighted.toFixed(2)),
         reviewCount: count,
         positiveCount,
         mixedCount,
@@ -599,9 +761,60 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       });
   }, [user, reviews, games, comments, membersById, notifReadState]);
 
+  const openCoverReports = useMemo(
+    () => (isAdmin ? coverReports.filter((r) => r.status === 'open') : []),
+    [isAdmin, coverReports],
+  );
+
+  const myOpenCoverReportGameIds = useMemo(() => {
+    const set = new Set<string>();
+    if (!user) return set;
+    for (const r of coverReports) {
+      if (r.reporterId === user.uid && r.status === 'open') {
+        set.add(r.gameId);
+      }
+    }
+    return set;
+  }, [coverReports, user]);
+
+  const coverReportNotifications = useMemo<CoverReportNotification[]>(() => {
+    if (!user || !isAdmin) return [];
+    const gamesById = new Map<string, Game>();
+    for (const g of games) gamesById.set(g.id, g);
+    const readIdSet = new Set(notifReadState.readIds);
+
+    return openCoverReports.map((report) => {
+      const liveReporter = membersById[report.reporterId];
+      const liveGame = gamesById.get(report.gameId);
+      const notifId = `cover_${report.id}`;
+      const updatedMs = getTimeMillis(report.updatedAt || report.createdAt);
+      const unread =
+        !readIdSet.has(notifId) && updatedMs > notifReadState.readAllBeforeMs;
+
+      return {
+        id: notifId,
+        reportId: report.id,
+        gameId: report.gameId,
+        gameTitle: liveGame?.title || report.gameTitle,
+        gameCoverUrl: liveGame?.coverUrl ?? report.gameCoverUrl,
+        reporterId: report.reporterId,
+        reporterName: liveReporter?.displayName || report.reporterName,
+        reporterPhotoURL:
+          liveReporter?.photoURL ||
+          (report.reporterId === user.uid ? user.photoURL || '' : ''),
+        reporterFallbackPhotoURL: report.reporterPhotoURL || '',
+        note: report.note,
+        createdAt: report.updatedAt || report.createdAt,
+        unread,
+      };
+    });
+  }, [user, isAdmin, openCoverReports, games, membersById, notifReadState]);
+
   const unreadNotificationCount = useMemo(
-    () => commentNotifications.filter((n) => n.unread).length,
-    [commentNotifications],
+    () =>
+      commentNotifications.filter((n) => n.unread).length +
+      coverReportNotifications.filter((n) => n.unread).length,
+    [commentNotifications, coverReportNotifications],
   );
 
   const latestLiveNotification = useMemo(() => {
@@ -609,20 +822,33 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     return commentNotifications.find((n) => n.id === liveNotifId) || null;
   }, [commentNotifications, liveNotifId]);
 
+  const latestLiveCoverReport = useMemo(() => {
+    if (!liveCoverReportId || !isAdmin) return null;
+    return (
+      coverReportNotifications.find((n) => n.reportId === liveCoverReportId) || null
+    );
+  }, [coverReportNotifications, liveCoverReportId, isAdmin]);
+
   useEffect(() => {
     if (!liveNotifId) return;
     const timer = window.setTimeout(() => setLiveNotifId(null), 6000);
     return () => window.clearTimeout(timer);
   }, [liveNotifId]);
 
+  useEffect(() => {
+    if (!liveCoverReportId) return;
+    const timer = window.setTimeout(() => setLiveCoverReportId(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [liveCoverReportId]);
+
   const markNotificationRead = useCallback(
-    (commentId: string) => {
+    (notifId: string) => {
       if (!user) return;
       setNotifReadState((prev) => {
-        if (prev.readIds.includes(commentId)) return prev;
+        if (prev.readIds.includes(notifId)) return prev;
         const next: NotificationReadState = {
           ...prev,
-          readIds: [...prev.readIds, commentId].slice(-300),
+          readIds: [...prev.readIds, notifId].slice(-300),
         };
         saveNotificationReadState(user.uid, next);
         return next;
@@ -633,7 +859,10 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
 
   const markAllNotificationsRead = useCallback(() => {
     if (!user) return;
-    const allIds = commentNotifications.map((n) => n.id);
+    const allIds = [
+      ...commentNotifications.map((n) => n.id),
+      ...coverReportNotifications.map((n) => n.id),
+    ];
     setNotifReadState((prev) => {
       const mergedIds = Array.from(new Set([...prev.readIds, ...allIds])).slice(-300);
       const next: NotificationReadState = {
@@ -644,10 +873,15 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
     setLiveNotifId(null);
-  }, [user, commentNotifications]);
+    setLiveCoverReportId(null);
+  }, [user, commentNotifications, coverReportNotifications]);
 
   const dismissLiveNotification = useCallback(() => {
     setLiveNotifId(null);
+  }, []);
+
+  const dismissLiveCoverReport = useCallback(() => {
+    setLiveCoverReportId(null);
   }, []);
 
   const signInWithGoogle = async () => {
@@ -827,6 +1061,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       .filter(Boolean)
       .slice(0, LIMITS.GENRES_MAX);
 
+    const nextCoverUrl = sanitizeOptionalUrl(input.coverUrl);
+    const prevGame = games.find((g) => g.id === gameId);
+
     const path = `games/${gameId}`;
     try {
       await updateDoc(doc(db, 'games', gameId), {
@@ -837,9 +1074,26 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         platforms: cleanPlatforms,
         genres: cleanGenres,
         synopsis: input.synopsis.trim().slice(0, LIMITS.SYNOPSIS_MAX),
-        coverUrl: sanitizeOptionalUrl(input.coverUrl),
+        coverUrl: nextCoverUrl,
         updatedAt: serverTimestamp(),
       });
+
+      // Auto-resolve pending cover reports for this game when an admin changes the cover
+      if (isAdmin && prevGame && prevGame.coverUrl !== nextCoverUrl) {
+        const openForGame = coverReports.filter(
+          (r) => r.gameId === gameId && r.status === 'open',
+        );
+        if (openForGame.length > 0) {
+          await Promise.all(
+            openForGame.map((r) =>
+              updateDoc(doc(db, 'coverReports', r.id), {
+                status: 'resolved',
+                updatedAt: serverTimestamp(),
+              }),
+            ),
+          );
+        }
+      }
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
@@ -887,8 +1141,13 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const authorName = getCurrentDisplayName();
     const authorPhotoURL =
       sanitizeOptionalUrl(profile?.photoURL) || sanitizeOptionalUrl(user.photoURL);
-    const cleanHeadline = input.headline.trim().slice(0, LIMITS.HEADLINE_MAX);
-    const cleanBody = input.body.trim().slice(0, LIMITS.REVIEW_BODY_MAX);
+    const ratingOnly = Boolean(input.ratingOnly);
+    const cleanHeadline = ratingOnly
+      ? ''
+      : input.headline.trim().slice(0, LIMITS.HEADLINE_MAX);
+    const cleanBody = ratingOnly
+      ? ''
+      : input.body.trim().slice(0, LIMITS.REVIEW_BODY_MAX);
     const cleanPlatform = input.platformPlayed.trim().slice(0, 40) || game.platforms[0] || 'PC';
 
     try {
@@ -896,6 +1155,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       if (existingSnap.exists()) {
         await updateDoc(reviewRef, {
           score,
+          ratingOnly,
           headline: cleanHeadline,
           body: cleanBody,
           platformPlayed: cleanPlatform,
@@ -915,6 +1175,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           authorName,
           authorPhotoURL,
           score,
+          ratingOnly,
           headline: cleanHeadline,
           body: cleanBody,
           platformPlayed: cleanPlatform,
@@ -1113,6 +1374,257 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const sanitizeEventCategories = (rawCategories: EventCategory[]): EventCategory[] => {
+    return rawCategories
+      .slice(0, LIMITS.EVENT_CATEGORIES_MAX)
+      .map((cat) => {
+        const cleanId =
+          /^[a-zA-Z0-9_-]{1,128}$/.test(cat.id) ? cat.id : createSafeId('cat');
+        const cleanName = cat.name.trim().slice(0, LIMITS.EVENT_CATEGORY_NAME_MAX);
+        const cleanNominees: EventNominee[] = (cat.nominees || [])
+          .slice(0, LIMITS.EVENT_NOMINEES_MAX)
+          .map((nom) => ({
+            id: /^[a-zA-Z0-9_-]{1,128}$/.test(nom.id) ? nom.id : createSafeId('nom'),
+            gameId:
+              typeof nom.gameId === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(nom.gameId)
+                ? nom.gameId
+                : '',
+            title: nom.title.trim().slice(0, LIMITS.EVENT_NOMINEE_TITLE_MAX),
+            coverUrl: sanitizeOptionalUrl(nom.coverUrl),
+          }))
+          .filter((nom) => nom.title.length > 0);
+        const validWinnerId =
+          cat.winnerNomineeId &&
+          cleanNominees.some((nom) => nom.id === cat.winnerNomineeId)
+            ? cat.winnerNomineeId
+            : '';
+
+        return {
+          id: cleanId,
+          name: cleanName,
+          nominees: cleanNominees,
+          winnerNomineeId: validWinnerId,
+        };
+      })
+      .filter((cat) => cat.name.length > 0);
+  };
+
+  const createEvent = async (input: {
+    title: string;
+    description: string;
+    status: EventStatus;
+  }): Promise<string> => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem criar eventos.');
+    }
+    const cleanTitle = input.title.trim().slice(0, LIMITS.EVENT_TITLE_MAX);
+    if (!cleanTitle) {
+      throw new Error('Informe o nome do evento.');
+    }
+    const cleanDesc = input.description.trim().slice(0, LIMITS.EVENT_DESCRIPTION_MAX);
+    const safeStatus: EventStatus =
+      input.status === 'active' || input.status === 'closed' ? input.status : 'inactive';
+
+    const eventId = createSafeId('evt');
+    const path = `events/${eventId}`;
+    try {
+      await setDoc(doc(db, 'events', eventId), {
+        title: cleanTitle,
+        description: cleanDesc,
+        status: safeStatus,
+        categories: [],
+        createdBy: user.uid,
+        createdByName: getCurrentDisplayName(),
+        visibility: 'group' as const,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      return eventId;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  };
+
+  const updateEvent = async (
+    eventId: string,
+    input: {
+      title: string;
+      description: string;
+      status: EventStatus;
+      categories: EventCategory[];
+    },
+  ) => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem editar eventos.');
+    }
+    const cleanTitle = input.title.trim().slice(0, LIMITS.EVENT_TITLE_MAX);
+    if (!cleanTitle) {
+      throw new Error('Informe o nome do evento.');
+    }
+    const cleanDesc = input.description.trim().slice(0, LIMITS.EVENT_DESCRIPTION_MAX);
+    const safeStatus: EventStatus =
+      input.status === 'active' || input.status === 'closed' ? input.status : 'inactive';
+    const cleanCategories = sanitizeEventCategories(input.categories);
+
+    const path = `events/${eventId}`;
+    try {
+      await updateDoc(doc(db, 'events', eventId), {
+        title: cleanTitle,
+        description: cleanDesc,
+        status: safeStatus,
+        categories: cleanCategories,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const deleteEvent = async (eventId: string) => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem excluir eventos.');
+    }
+    const path = `events/${eventId}`;
+    try {
+      const relatedVotes = eventVotes.filter((v) => v.eventId === eventId);
+      await Promise.all(
+        relatedVotes.map((v) => deleteDoc(doc(db, 'eventVotes', v.id))),
+      );
+      await deleteDoc(doc(db, 'events', eventId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const castEventVote = async (
+    eventId: string,
+    categoryId: string,
+    nominee: EventNominee,
+  ) => {
+    if (!user || isBanned) {
+      throw new Error('Faça login para votar neste evento.');
+    }
+    const voteId = `${eventId}_${categoryId}_${user.uid}`;
+    const voteRef = doc(db, 'eventVotes', voteId);
+    const path = `eventVotes/${voteId}`;
+    const userName = getCurrentDisplayName();
+    const userPhotoURL =
+      sanitizeOptionalUrl(profile?.photoURL) || sanitizeOptionalUrl(user.photoURL);
+    const nomineeTitle = nominee.title.trim().slice(0, LIMITS.EVENT_NOMINEE_TITLE_MAX);
+
+    try {
+      const existingSnap = await getDoc(voteRef);
+      if (existingSnap.exists()) {
+        await updateDoc(voteRef, {
+          nomineeId: nominee.id,
+          nomineeTitle,
+          userName,
+          userPhotoURL,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(voteRef, {
+          eventId,
+          categoryId,
+          nomineeId: nominee.id,
+          nomineeTitle,
+          userId: user.uid,
+          userName,
+          userPhotoURL,
+          visibility: 'group' as const,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  };
+
+  const removeEventVote = async (eventId: string, categoryId: string) => {
+    if (!user || isBanned) return;
+    const voteId = `${eventId}_${categoryId}_${user.uid}`;
+    const path = `eventVotes/${voteId}`;
+    try {
+      await deleteDoc(doc(db, 'eventVotes', voteId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
+  const reportIncorrectCover = async (game: Game, note = '') => {
+    if (!user || isBanned) {
+      throw new Error('Faça login para reportar uma capa incorreta.');
+    }
+    const reportId = `${game.id}_${user.uid}`;
+    const reportRef = doc(db, 'coverReports', reportId);
+    const path = `coverReports/${reportId}`;
+    const cleanNote = note.trim().slice(0, LIMITS.COVER_REPORT_NOTE_MAX);
+    const reporterName = getCurrentDisplayName();
+    const reporterPhotoURL =
+      sanitizeOptionalUrl(profile?.photoURL) || sanitizeOptionalUrl(user.photoURL);
+    const gameTitle = game.title.slice(0, LIMITS.GAME_TITLE_MAX);
+    const gameCoverUrl = sanitizeOptionalUrl(game.coverUrl);
+
+    try {
+      const existingSnap = await getDoc(reportRef);
+      if (existingSnap.exists()) {
+        await updateDoc(reportRef, {
+          note: cleanNote,
+          status: 'open',
+          gameTitle,
+          gameCoverUrl,
+          reporterName,
+          reporterPhotoURL,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await setDoc(reportRef, {
+          gameId: game.id,
+          gameTitle,
+          gameCoverUrl,
+          reporterId: user.uid,
+          reporterName,
+          reporterPhotoURL,
+          note: cleanNote,
+          status: 'open' as const,
+          visibility: 'group' as const,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  };
+
+  const resolveCoverReport = async (reportId: string) => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem resolver reportes de capa.');
+    }
+    const path = `coverReports/${reportId}`;
+    try {
+      await updateDoc(doc(db, 'coverReports', reportId), {
+        status: 'resolved',
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const deleteCoverReport = async (reportId: string) => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem excluir reportes de capa.');
+    }
+    const path = `coverReports/${reportId}`;
+    try {
+      await deleteDoc(doc(db, 'coverReports', reportId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  };
+
   return (
     <VereditoContext.Provider
       value={{
@@ -1139,14 +1651,22 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         reviews,
         comments,
         reactions,
+        events,
+        eventVotes,
+        coverReports,
+        openCoverReports,
+        myOpenCoverReportGameIds,
         commentsByReview,
         reactionsByReview,
         commentNotifications,
+        coverReportNotifications,
         unreadNotificationCount,
         latestLiveNotification,
+        latestLiveCoverReport,
         markNotificationRead,
         markAllNotificationsRead,
         dismissLiveNotification,
+        dismissLiveCoverReport,
         signInWithGoogle,
         signInWithAdminCredentials,
         signOutUser,
@@ -1165,6 +1685,14 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         banUser,
         unbanUser,
         purgeMemberContent,
+        createEvent,
+        updateEvent,
+        deleteEvent,
+        castEventVote,
+        removeEventVote,
+        reportIncorrectCover,
+        resolveCoverReport,
+        deleteCoverReport,
       }}
     >
       {children}

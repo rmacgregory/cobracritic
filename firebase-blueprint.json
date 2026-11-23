@@ -196,17 +196,21 @@
           "type": "number",
           "description": "Integer score from 0 to 100."
         },
+        "ratingOnly": {
+          "type": "boolean",
+          "description": "True when the member chose to submit only a numeric score without writing a critique."
+        },
         "headline": {
           "type": "string",
-          "minLength": 2,
+          "minLength": 0,
           "maxLength": 140,
-          "description": "Short verdict title for the review."
+          "description": "Short verdict title for the review (empty when ratingOnly is true, 2..140 chars otherwise)."
         },
         "body": {
           "type": "string",
-          "minLength": 10,
+          "minLength": 0,
           "maxLength": 4000,
-          "description": "Full written critique."
+          "description": "Full written critique (empty when ratingOnly is true, 10..4000 chars otherwise)."
         },
         "platformPlayed": {
           "type": "string",
@@ -479,6 +483,232 @@
         "visibility",
         "createdAt"
       ]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "Group awards or prediction event with admin-managed categories, nominated games, active/inactive/closed lifecycle, and official winners.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Event name."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional event description or rules."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "inactive", "closed"],
+          "description": "Lifecycle status: active (voting open), inactive (paused/draft), closed (winners declared)."
+        },
+        "categories": {
+          "type": "array",
+          "description": "Bounded list (0 to 30) of event categories containing nominated games and optional winnerNomineeId."
+        },
+        "createdBy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the admin who created the event."
+        },
+        "createdByName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the admin who created the event."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group-shared visibility scope."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of event creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last event update."
+        }
+      },
+      "required": [
+        "title",
+        "description",
+        "status",
+        "categories",
+        "createdBy",
+        "createdByName",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "EventVote": {
+      "title": "EventVote",
+      "description": "A member's public vote for a nominated game in a specific event category.",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Reference ID of the parent event."
+        },
+        "categoryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Identifier of the category within the event."
+        },
+        "nomineeId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Identifier of the nominated game voted for."
+        },
+        "nomineeTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Denormalized nominee game title."
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the member casting the vote."
+        },
+        "userName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the voting member."
+        },
+        "userPhotoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional HTTPS avatar URL of the voting member."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group-shared visibility scope."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of vote creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last vote update."
+        }
+      },
+      "required": [
+        "eventId",
+        "categoryId",
+        "nomineeId",
+        "nomineeTitle",
+        "userId",
+        "userName",
+        "userPhotoURL",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "CoverReport": {
+      "title": "CoverReport",
+      "description": "Report filed by a member when a game's cover art is incorrect or broken, routed to admins for review.",
+      "type": "object",
+      "properties": {
+        "gameId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Reference ID of the game with the incorrect cover."
+        },
+        "gameTitle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120,
+          "description": "Denormalized title of the reported game."
+        },
+        "gameCoverUrl": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Current cover URL at the time of the report."
+        },
+        "reporterId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the member who reported the cover."
+        },
+        "reporterName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the reporting member."
+        },
+        "reporterPhotoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional HTTPS avatar URL of the reporter."
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Optional note describing what is wrong with the cover."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["open", "resolved"],
+          "description": "Report status managed by admins."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group scope identifier for query enforcement."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of report submission."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last status update."
+        }
+      },
+      "required": [
+        "gameId",
+        "gameTitle",
+        "gameCoverUrl",
+        "reporterId",
+        "reporterName",
+        "reporterPhotoURL",
+        "note",
+        "status",
+        "visibility",
+        "createdAt",
+        "updatedAt"
+      ]
     }
   },
   "firestore": {
@@ -509,6 +739,18 @@
     "/reactions/{reactionId}": {
       "schema": { "$ref": "#/entities/ReviewReaction" },
       "description": "Friend agreement reactions on reviews. Deterministic ID {reviewId}_{userId}."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/Event" },
+      "description": "Admin-managed awards and voting events with categories, nominated games, and winners."
+    },
+    "/eventVotes/{voteId}": {
+      "schema": { "$ref": "#/entities/EventVote" },
+      "description": "Public member votes per event category. Deterministic ID {eventId}_{categoryId}_{userId} enforces one vote per member per category."
+    },
+    "/coverReports/{reportId}": {
+      "schema": { "$ref": "#/entities/CoverReport" },
+      "description": "Incorrect cover art reports sent by members to administrators. Deterministic ID {gameId}_{reporterId}."
     }
   }
 }

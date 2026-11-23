@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, Pencil, Send, ThumbsUp, Trash2 } from 'lucide-react';
+import { MessageSquare, Pencil, Send, Star, ThumbsUp, Trash2 } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import {
   LIMITS,
@@ -66,6 +66,9 @@ export function ReviewCard({
     (review.authorId === user?.uid ? user?.photoURL || '' : '');
   const resolvedAuthorFallbackPhoto = review.authorPhotoURL || '';
   const scoreMeta = getScoreMeta(review.score);
+  const isRatingOnly = Boolean(
+    review.ratingOnly || (!review.headline.trim() && !review.body.trim()),
+  );
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -219,15 +222,25 @@ export function ReviewCard({
         </div>
       </div>
 
-      {/* Critique content */}
-      <div className="space-y-2.5 max-w-prose">
-        <h3 className="font-serif text-xl font-medium text-[#F2F2EE] leading-snug">
-          {review.headline}
-        </h3>
-        <p className="text-[15px] text-[#C8CBC4] leading-[1.7] whitespace-pre-line">
-          {review.body}
-        </p>
-      </div>
+      {/* Critique content or Rating-only notice */}
+      {isRatingOnly ? (
+        <div className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[#0F120F] border border-[#232923] text-xs text-[#A8ACA5]">
+          <Star className="w-3.5 h-3.5 text-[#4ADE80] shrink-0" />
+          <span>
+            <strong className="text-[#F2F2EE] font-medium">{resolvedAuthorName}</strong>{' '}
+            optou apenas por dar nota ao jogo.
+          </span>
+        </div>
+      ) : (
+        <div className="space-y-2.5 max-w-prose">
+          <h3 className="font-serif text-xl font-medium text-[#F2F2EE] leading-snug">
+            {review.headline}
+          </h3>
+          <p className="text-[15px] text-[#C8CBC4] leading-[1.7] whitespace-pre-line">
+            {review.body}
+          </p>
+        </div>
+      )}
 
       {/* Actions footer */}
       <div className="pt-3 border-t border-[#222622] flex flex-wrap items-center justify-between gap-4">

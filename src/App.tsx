@@ -4,6 +4,7 @@ import { AdminPanelView } from './components/AdminPanelView';
 import { AuthGate } from './components/AuthGate';
 import { CatalogView } from './components/CatalogView';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { EventsView } from './components/EventsView';
 import { GameDetailView } from './components/GameDetailView';
 import { GameFormModal } from './components/GameFormModal';
 import { GlobalSearchBar } from './components/GlobalSearchBar';
@@ -256,6 +257,7 @@ function CobraCriticShell() {
   const tabLabels: Record<ActiveTab, string> = {
     catalog: 'Catálogo',
     feed: 'Feed Social',
+    events: 'Eventos',
     ranking: 'Ranking',
     members: 'Membros',
     profile: 'Meu Perfil',
@@ -333,7 +335,10 @@ function CobraCriticShell() {
           />
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <NotificationsBell onSelectGame={handleSelectGame} />
+            <NotificationsBell
+              onSelectGame={handleSelectGame}
+              onEditGame={handleOpenEditGame}
+            />
 
             <button
               type="button"
@@ -373,6 +378,11 @@ function CobraCriticShell() {
               onSelectAuthor={(uid) => handleSelectMember(uid)}
               onEditReview={(game, rev) => handleOpenReview(game, rev)}
               onGoToCatalog={() => handleSelectTab('catalog')}
+            />
+          ) : effectiveTab === 'events' ? (
+            <EventsView
+              onSelectGame={handleSelectGame}
+              onSelectMember={(uid) => handleSelectMember(uid)}
             />
           ) : effectiveTab === 'ranking' ? (
             <RankingView

@@ -75,6 +75,25 @@ service cloud.firestore {
         (list.size() < 5 || (list[4] is string && list[4].size() >= 1 && list[4].size() <= 120));
     }
 
+    function isValidEventCategorySample(cat) {
+      return cat is map &&
+        cat.keys().hasAll(['id', 'name', 'nominees', 'winnerNomineeId']) &&
+        cat.keys().hasOnly(['id', 'name', 'nominees', 'winnerNomineeId']) &&
+        isValidId(cat.id) &&
+        cat.name is string && cat.name.size() >= 1 && cat.name.size() <= 100 &&
+        cat.nominees is list && cat.nominees.size() <= 16 &&
+        (cat.nominees.size() == 0 || (
+          cat.nominees[0] is map &&
+          cat.nominees[0].keys().hasAll(['id', 'gameId', 'title', 'coverUrl']) &&
+          cat.nominees[0].keys().hasOnly(['id', 'gameId', 'title', 'coverUrl']) &&
+          isValidId(cat.nominees[0].id) &&
+          cat.nominees[0].gameId is string && cat.nominees[0].gameId.size() <= 128 &&
+          cat.nominees[0].title is string && cat.nominees[0].title.size() >= 1 && cat.nominees[0].title.size() <= 120 &&
+          isSafeOptionalUrl(cat.nominees[0].coverUrl)
+        )) &&
+        cat.winnerNomineeId is string && cat.winnerNomineeId.size() <= 128;
+    }
+
     // ---------------------------------------------------------
     // Entity Validation Blueprints (Anti-Update-Gap)
     // ---------------------------------------------------------
@@ -177,7 +196,7 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'gameId', 'gameTitle', 'gameCoverUrl', 'authorId', 'authorName', 'authorPhotoURL',
-          'score', 'headline', 'body', 'platformPlayed', 'hoursPlayed',
+          'score', 'ratingOnly', 'headline', 'body', 'platformPlayed', 'hoursPlayed',
           'visibility', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.gameId) &&
@@ -187,8 +206,13 @@ service cloud.firestore {
         data.authorName is string && data.authorName.size() >= 1 && data.authorName.size() <= 80 &&
         isSafeOptionalUrl(data.authorPhotoURL) &&
         data.score is int && data.score >= 0 && data.score <= 100 &&
-        data.headline is string && data.headline.size() >= 2 && data.headline.size() <= 140 &&
-        data.body is string && data.body.size() >= 10 && data.body.size() <= 4000 &&
+        (!('ratingOnly' in data) || data.ratingOnly is bool) &&
+        data.headline is string && data.headline.size() <= 140 &&
+        data.body is string && data.body.size() <= 4000 &&
+        (
+          ('ratingOnly' in data && data.ratingOnly == true && data.headline == '' && data.body == '') ||
+          (data.headline.size() >= 2 && data.body.size() >= 10)
+        ) &&
         data.platformPlayed is string && data.platformPlayed.size() >= 1 && data.platformPlayed.size() <= 40 &&
         data.hoursPlayed is number && data.hoursPlayed >= 0 && data.hoursPlayed <= 10000 &&
         data.visibility is string && data.visibility == 'group' &&
@@ -230,6 +254,71 @@ service cloud.firestore {
         data.type is string && data.type == 'agree' &&
         data.visibility is string && data.visibility == 'group' &&
         data.createdAt is timestamp;
+    }
+
+    function isValidEvent(data) {
+      return data.keys().hasAll([
+          'title', 'description', 'status', 'categories',
+          'createdBy', 'createdByName', 'visibility', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'title', 'description', 'status', 'categories',
+          'createdBy', 'createdByName', 'visibility', 'createdAt', 'updatedAt'
+        ]) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.description is string && data.description.size() <= 500 &&
+        data.status is string && data.status in ['active', 'inactive', 'closed'] &&
+        data.categories is list && data.categories.size() <= 30 &&
+        (data.categories.size() == 0 || isValidEventCategorySample(data.categories[0])) &&
+        isValidId(data.createdBy) &&
+        data.createdByName is string && data.createdByName.size() >= 1 && data.createdByName.size() <= 80 &&
+        data.visibility is string && data.visibility == 'group' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidEventVote(data) {
+      return data.keys().hasAll([
+          'eventId', 'categoryId', 'nomineeId', 'nomineeTitle',
+          'userId', 'userName', 'userPhotoURL', 'visibility', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'eventId', 'categoryId', 'nomineeId', 'nomineeTitle',
+          'userId', 'userName', 'userPhotoURL', 'visibility', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.eventId) &&
+        isValidId(data.categoryId) &&
+        isValidId(data.nomineeId) &&
+        data.nomineeTitle is string && data.nomineeTitle.size() >= 1 && data.nomineeTitle.size() <= 120 &&
+        isValidId(data.userId) &&
+        data.userId == request.auth.uid &&
+        data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 80 &&
+        isSafeOptionalUrl(data.userPhotoURL) &&
+        data.visibility is string && data.visibility == 'group' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCoverReport(data) {
+      return data.keys().hasAll([
+          'gameId', 'gameTitle', 'gameCoverUrl', 'reporterId', 'reporterName',
+          'reporterPhotoURL', 'note', 'status', 'visibility', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'gameId', 'gameTitle', 'gameCoverUrl', 'reporterId', 'reporterName',
+          'reporterPhotoURL', 'note', 'status', 'visibility', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.gameId) &&
+        data.gameTitle is string && data.gameTitle.size() >= 1 && data.gameTitle.size() <= 120 &&
+        isSafeOptionalUrl(data.gameCoverUrl) &&
+        isValidId(data.reporterId) &&
+        data.reporterName is string && data.reporterName.size() >= 1 && data.reporterName.size() <= 80 &&
+        isSafeOptionalUrl(data.reporterPhotoURL) &&
+        data.note is string && data.note.size() <= 300 &&
+        data.status is string && data.status in ['open', 'resolved'] &&
+        data.visibility is string && data.visibility == 'group' &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
     }
 
     // ---------------------------------------------------------
@@ -362,12 +451,12 @@ service cloud.firestore {
         (
           (existing().authorId == request.auth.uid &&
             incoming().diff(existing()).affectedKeys().hasOnly([
-              'score', 'headline', 'body', 'platformPlayed', 'hoursPlayed',
+              'score', 'ratingOnly', 'headline', 'body', 'platformPlayed', 'hoursPlayed',
               'authorName', 'authorPhotoURL', 'gameTitle', 'gameCoverUrl', 'updatedAt'
             ])) ||
           (isAdmin() &&
             incoming().diff(existing()).affectedKeys().hasOnly([
-              'score', 'headline', 'body', 'platformPlayed', 'hoursPlayed',
+              'score', 'ratingOnly', 'headline', 'body', 'platformPlayed', 'hoursPlayed',
               'gameTitle', 'gameCoverUrl', 'updatedAt'
             ]))
         );
@@ -415,6 +504,117 @@ service cloud.firestore {
         isValidId(reactionId) &&
         canMemberWrite() &&
         (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // ---------------------------------------------------------
+    // Collection: /events/{eventId} (Awards & Voting Events)
+    // ---------------------------------------------------------
+    match /events/{eventId} {
+      allow get: if isSignedIn() && isValidId(eventId) && (resource == null || existing().visibility == 'group');
+      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow create: if isSignedIn() &&
+        isValidId(eventId) &&
+        isValidEvent(incoming()) &&
+        incoming().createdBy == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        isAdmin();
+      allow update: if isSignedIn() &&
+        isValidId(eventId) &&
+        isValidEvent(incoming()) &&
+        incoming().createdBy == existing().createdBy &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'description', 'status', 'categories', 'updatedAt'
+        ]) &&
+        isAdmin();
+      allow delete: if isSignedIn() &&
+        isValidId(eventId) &&
+        isAdmin();
+    }
+
+    // ---------------------------------------------------------
+    // Collection: /eventVotes/{voteId} (Public Member Votes)
+    // Deterministic ID: {eventId}_{categoryId}_{userId}
+    // ---------------------------------------------------------
+    match /eventVotes/{voteId} {
+      allow get: if isSignedIn() && isValidId(voteId) && (resource == null || existing().visibility == 'group');
+      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow create: if isSignedIn() &&
+        isValidId(voteId) &&
+        isValidEventVote(incoming()) &&
+        voteId == incoming().eventId + '_' + incoming().categoryId + '_' + request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        canMemberWrite() &&
+        exists(/databases/$(database)/documents/events/$(incoming().eventId)) &&
+        get(/databases/$(database)/documents/events/$(incoming().eventId)).data.status == 'active';
+      allow update: if isSignedIn() &&
+        isValidId(voteId) &&
+        isValidEventVote(incoming()) &&
+        existing().userId == request.auth.uid &&
+        incoming().eventId == existing().eventId &&
+        incoming().categoryId == existing().categoryId &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'nomineeId', 'nomineeTitle', 'userName', 'userPhotoURL', 'updatedAt'
+        ]) &&
+        canMemberWrite() &&
+        get(/databases/$(database)/documents/events/$(existing().eventId)).data.status == 'active';
+      allow delete: if isSignedIn() &&
+        isValidId(voteId) &&
+        canMemberWrite() &&
+        (
+          isAdmin() ||
+          (
+            existing().userId == request.auth.uid &&
+            get(/databases/$(database)/documents/events/$(existing().eventId)).data.status == 'active'
+          )
+        );
+    }
+
+    // ---------------------------------------------------------
+    // Collection: /coverReports/{reportId} (Incorrect Cover Reports)
+    // Deterministic ID: {gameId}_{reporterId}
+    // ---------------------------------------------------------
+    match /coverReports/{reportId} {
+      allow get: if isSignedIn() && isValidId(reportId) && (resource == null || existing().visibility == 'group');
+      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow create: if isSignedIn() &&
+        isValidId(reportId) &&
+        isValidCoverReport(incoming()) &&
+        incoming().reporterId == request.auth.uid &&
+        reportId == incoming().gameId + '_' + request.auth.uid &&
+        incoming().status == 'open' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        canMemberWrite() &&
+        exists(/databases/$(database)/documents/games/$(incoming().gameId));
+      allow update: if isSignedIn() &&
+        isValidId(reportId) &&
+        isValidCoverReport(incoming()) &&
+        incoming().gameId == existing().gameId &&
+        incoming().reporterId == existing().reporterId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        canMemberWrite() &&
+        (
+          (existing().reporterId == request.auth.uid &&
+            incoming().status == 'open' &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'note', 'status', 'gameTitle', 'gameCoverUrl', 'reporterName', 'reporterPhotoURL', 'updatedAt'
+            ])) ||
+          (isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'updatedAt'
+            ]))
+        );
+      allow delete: if isSignedIn() &&
+        isValidId(reportId) &&
+        isAdmin();
     }
   }
 }

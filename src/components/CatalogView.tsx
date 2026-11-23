@@ -32,6 +32,7 @@ interface CatalogViewProps {
 
 type SortOption =
   | 'score_desc'
+  | 'avg_desc'
   | 'release_desc'
   | 'release_asc'
   | 'reviews_desc'
@@ -88,13 +89,16 @@ export function CatalogView({
 
   const featuredGame = useMemo(() => {
     if (gamesWithStats.length === 0) return null;
-    const rated = gamesWithStats.filter((g) => g.averageScore !== null);
+    const rated = gamesWithStats.filter((g) => g.weightedScore !== null);
     if (rated.length > 0) {
       return [...rated].sort((a, b) => {
-        if ((b.averageScore ?? -1) !== (a.averageScore ?? -1)) {
-          return (b.averageScore ?? -1) - (a.averageScore ?? -1);
+        if ((b.weightedScore ?? -1) !== (a.weightedScore ?? -1)) {
+          return (b.weightedScore ?? -1) - (a.weightedScore ?? -1);
         }
-        return b.reviewCount - a.reviewCount;
+        if (b.reviewCount !== a.reviewCount) {
+          return b.reviewCount - a.reviewCount;
+        }
+        return (b.averageScore ?? -1) - (a.averageScore ?? -1);
       })[0];
     }
     return gamesWithStats[0];
@@ -144,6 +148,13 @@ export function CatalogView({
     return [...matches].sort((a, b) => {
       switch (sortBy) {
         case 'score_desc': {
+          const weightA = a.weightedScore ?? -1;
+          const weightB = b.weightedScore ?? -1;
+          if (weightB !== weightA) return weightB - weightA;
+          if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount;
+          return (b.averageScore ?? -1) - (a.averageScore ?? -1);
+        }
+        case 'avg_desc': {
           const scoreA = a.averageScore ?? -1;
           const scoreB = b.averageScore ?? -1;
           if (scoreB !== scoreA) return scoreB - scoreA;
@@ -285,7 +296,7 @@ export function CatalogView({
               <div className="space-y-3">
                 <p className="text-xs font-mono uppercase tracking-[0.15em] text-[#4ADE80]">
                   {featuredGame.averageScore !== null
-                    ? 'Maior média dos Cobras'
+                    ? 'Top 1 dos Cobras (nota + volume)'
                     : 'Recém-adicionado ao catálogo'}
                   {' · '}
                   <span className="text-[#90968C]">
@@ -516,7 +527,8 @@ export function CatalogView({
                 aria-label="Ordenar jogos"
                 className="w-full px-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] focus:outline-none focus:border-[#4ADE80]"
               >
-                <option value="score_desc">Maior média</option>
+                <option value="score_desc">Top jogos (ponderado)</option>
+                <option value="avg_desc">Maior média simples</option>
                 <option value="release_desc">Mais recentes</option>
                 <option value="release_asc">Mais antigos</option>
                 <option value="reviews_desc">Mais avaliados</option>

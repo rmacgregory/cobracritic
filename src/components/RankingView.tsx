@@ -13,12 +13,15 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
 
   const rankedGames = useMemo(() => {
     return gamesWithStats
-      .filter((g) => g.averageScore !== null)
+      .filter((g) => g.averageScore !== null && g.weightedScore !== null)
       .sort((a, b) => {
-        if ((b.averageScore ?? 0) !== (a.averageScore ?? 0)) {
-          return (b.averageScore ?? 0) - (a.averageScore ?? 0);
+        if ((b.weightedScore ?? 0) !== (a.weightedScore ?? 0)) {
+          return (b.weightedScore ?? 0) - (a.weightedScore ?? 0);
         }
-        return b.reviewCount - a.reviewCount;
+        if (b.reviewCount !== a.reviewCount) {
+          return b.reviewCount - a.reviewCount;
+        }
+        return (b.averageScore ?? 0) - (a.averageScore ?? 0);
       });
   }, [gamesWithStats]);
 
@@ -93,16 +96,21 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
           Ranking &amp; Estatísticas
         </h1>
         <p className="text-sm text-[#90968C] mt-1.5 max-w-2xl">
-          Classificação calculada apenas a partir das notas de 0 a 100 publicadas pelos
-          membros do CobraCritic.
+          Classificação balanceada pela nota média e pelo volume de avaliações do grupo,
+          evitando que um jogo com apenas 1 nota supere títulos aclamados por vários Cobras.
         </p>
       </div>
 
       {/* Main Ranking Table */}
       <section aria-label="Melhores jogos segundo o grupo" className="space-y-4">
-        <h2 className="font-serif text-2xl font-medium text-[#F2F2EE]">
-          Classificação Geral
-        </h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="font-serif text-2xl font-medium text-[#F2F2EE]">
+            Classificação Geral (Top Jogos)
+          </h2>
+          <p className="text-xs text-[#787D75]">
+            Ordenado pelo índice ponderado (média + peso do número de avaliações)
+          </p>
+        </div>
 
         {rankedGames.length === 0 ? (
           <div className="border border-[#262A26] bg-[#141614] p-10 text-center">
@@ -126,6 +134,12 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
                   </th>
                   <th className="py-3.5 px-4 font-medium hidden lg:table-cell">
                     Faixa
+                  </th>
+                  <th
+                    className="py-3.5 px-4 font-medium text-right hidden md:table-cell"
+                    title="Pontuação ponderada combinando nota média e quantidade de avaliações"
+                  >
+                    Índice
                   </th>
                   <th className="py-3.5 px-4 font-medium text-right">Média</th>
                 </tr>
@@ -155,11 +169,14 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
                       </td>
                       <td className="py-4 px-4 text-xs text-[#A8ACA5] tabular-nums hidden sm:table-cell whitespace-nowrap">
                         {game.reviewCount}{' '}
-                        {game.reviewCount === 1 ? 'crítica' : 'críticas'} ·{' '}
+                        {game.reviewCount === 1 ? 'avaliação' : 'avaliações'} ·{' '}
                         <span className={meta.accentTextClass}>{meta.shortLabel}</span>
                       </td>
                       <td className="py-4 px-4 font-mono text-xs text-[#8C9288] tabular-nums hidden lg:table-cell whitespace-nowrap">
                         {game.minScore}–{game.maxScore}
+                      </td>
+                      <td className="py-4 px-4 text-right font-mono text-xs text-[#A8ACA5] tabular-nums hidden md:table-cell whitespace-nowrap">
+                        {game.weightedScore !== null ? game.weightedScore.toFixed(1) : '—'}
                       </td>
                       <td className="py-4 px-4 text-right">
                         <div className="inline-flex justify-end">

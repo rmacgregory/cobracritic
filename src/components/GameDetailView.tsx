@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
+import { ArrowLeft, Check, Flag, Pencil, Trash2, X } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
-import { formatReleaseDate, type GameWithStats, type Review } from '../types';
+import { LIMITS, formatReleaseDate, type GameWithStats, type Review } from '../types';
 import { GameCover } from './GameCover';
 import { ReviewCard } from './ReviewCard';
 import { ScoreBadge } from './ScoreBadge';
@@ -21,9 +21,22 @@ export function GameDetailView({
   onEditGame,
   onSelectAuthor,
 }: GameDetailViewProps) {
-  const { user, isAdmin, deleteGame } = useVeredito();
+  const {
+    user,
+    isAdmin,
+    myOpenCoverReportGameIds,
+    deleteGame,
+    reportIncorrectCover,
+  } = useVeredito();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showCoverReportForm, setShowCoverReportForm] = useState(false);
+  const [coverReportNote, setCoverReportNote] = useState('');
+  const [submittingCoverReport, setSubmittingCoverReport] = useState(false);
+  const [coverReportFeedback, setCoverReportFeedback] = useState<string | null>(null);
+  const [coverReportError, setCoverReportError] = useState<string | null>(null);
+
+  const alreadyReportedCover = myOpenCoverReportGameIds.has(game.id);
 
   const myReview = user
     ? game.reviews.find((r) => r.authorId === user.uid) || null
@@ -38,6 +51,26 @@ export function GameDetailView({
       onBack();
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleSubmitCoverReport = async (e: FormEvent) => {
+    e.preventDefault();
+    if (submittingCoverReport) return;
+    setSubmittingCoverReport(true);
+    setCoverReportError(null);
+    setCoverReportFeedback(null);
+    try {
+      await reportIncorrectCover(game, coverReportNote);
+      setCoverReportNote('');
+      setShowCoverReportForm(false);
+      setCoverReportFeedback('Capa reportada! Os administradores foram notificados.');
+    } catch (err) {
+      setCoverReportError(
+        err instanceof Error ? err.message : 'Não foi possível enviar o reporte.',
+      );
+    } finally {
+      setSubmittingCoverReport(false);
     }
   };
 
@@ -100,13 +133,104 @@ export function GameDetailView({
 
       {/* Editorial Game Dossier */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 pb-12 border-b border-[#232723]">
-        <div className="lg:col-span-4 max-w-[280px] lg:max-w-none w-full">
+        <div className="lg:col-span-4 max-w-[280px] lg:max-w-none w-full space-y-3">
           <GameCover
             title={game.title}
             developer={game.developer}
             releaseYear={game.releaseYear}
             coverUrl={game.coverUrl}
           />
+
+          {/* Report Incorrect Cover Control */}
+          <div className="space-y-2">
+            {alreadyReportedCover && !showCoverReportForm ? (
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-md bg-[#131F16] border border-[#244E33] text-xs text-[#86EFAC]">
+                <span className="inline-flex items-center gap-1.5 min-w-0">
+                  <Check className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Capa reportada aos admins</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCoverReportForm(true);
+                    setCoverReportFeedback(null);
+                    setCoverReportError(null);
+                  }}
+                  className="text-[11px] underline text-[#A8ACA5] hover:text-[#F2F2EE] shrink-0 cursor-pointer"
+                >
+                  Editar nota
+                </button>
+              </div>
+            ) : !showCoverReportForm ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCoverReportForm(true);
+                  setCoverReportFeedback(null);
+                  setCoverReportError(null);
+                }}
+                className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border border-[#262B26] bg-[#141614] text-[#90968C] hover:text-[#FBBF24] hover:border-[#5A4419] transition-colors cursor-pointer"
+              >
+                <Flag className="w-3.5 h-3.5" />
+                <span>Reportar capa incorreta</span>
+              </button>
+            ) : (
+              <form
+                onSubmit={handleSubmitCoverReport}
+                className="bg-[#141614] border border-[#3C331A] rounded-md p-3 space-y-2.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium text-[#FDE68A] flex items-center gap-1.5">
+                    <Flag className="w-3.5 h-3.5 text-[#FBBF24]" />
+                    <span>Reportar capa aos admins</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowCoverReportForm(false)}
+                    aria-label="Fechar reporte de capa"
+                    className="text-[#8C9288] hover:text-[#F2F2EE] cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <textarea
+                  rows={2}
+                  maxLength={LIMITS.COVER_REPORT_NOTE_MAX}
+                  value={coverReportNote}
+                  onChange={(e) => setCoverReportNote(e.target.value)}
+                  placeholder="Detalhe opcional (ex.: capa horizontal, jogo errado ou imagem quebrada)..."
+                  className="w-full px-2.5 py-2 text-xs bg-[#0C0D0C] border border-[#2A2F2A] rounded text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#FBBF24]"
+                />
+                {coverReportError && (
+                  <p className="text-[11px] text-[#F87171]" role="alert">
+                    {coverReportError}
+                  </p>
+                )}
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCoverReportForm(false)}
+                    className="px-2.5 py-1.5 text-xs text-[#8C9288] hover:text-[#F2F2EE] cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={submittingCoverReport}
+                    className="px-3 py-1.5 text-xs font-semibold bg-[#FBBF24] text-[#0C0D0C] rounded hover:bg-[#FCD34D] disabled:opacity-50 cursor-pointer"
+                  >
+                    {submittingCoverReport ? 'Enviando...' : 'Notificar admins'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {coverReportFeedback && (
+              <p className="text-[11px] text-[#86EFAC]" role="status">
+                {coverReportFeedback}
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="lg:col-span-8 flex flex-col justify-between gap-8">
@@ -173,7 +297,7 @@ export function GameDetailView({
                 onClick={() => onOpenReview(game, myReview)}
                 className="px-5 py-2.5 text-sm font-semibold bg-[#F2F2EE] text-[#0C0D0C] rounded-md hover:bg-white transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
-                {myReview ? 'Editar minha crítica' : 'Escrever crítica'}
+                {myReview ? 'Editar minha avaliação' : 'Avaliar jogo'}
               </button>
             </div>
 

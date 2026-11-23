@@ -1,8 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import {
   Ban,
+  Check,
   Eraser,
   ExternalLink,
+  Flag,
   Pencil,
   Search,
   Shield,
@@ -20,6 +22,7 @@ import {
   type GameWithStats,
 } from '../types';
 import { GameCover } from './GameCover';
+import { MemberAvatar } from './MemberAvatar';
 import { ScoreBadge } from './ScoreBadge';
 
 interface AdminPanelViewProps {
@@ -28,7 +31,7 @@ interface AdminPanelViewProps {
   onSelectMember: (uid: string) => void;
 }
 
-type AdminSection = 'members' | 'games' | 'posts';
+type AdminSection = 'members' | 'games' | 'covers' | 'posts';
 type MemberFilter = 'all' | 'admins' | 'banned';
 type PostTypeFilter = 'reviews' | 'comments';
 
@@ -49,6 +52,7 @@ export function AdminPanelView({
     gamesWithStats,
     reviews,
     comments,
+    openCoverReports,
     grantAdmin,
     revokeAdmin,
     banUser,
@@ -57,6 +61,8 @@ export function AdminPanelView({
     deleteReview,
     deleteComment,
     purgeMemberContent,
+    resolveCoverReport,
+    deleteCoverReport,
   } = useVeredito();
 
   const [section, setSection] = useState<AdminSection>('members');
@@ -290,8 +296,13 @@ export function AdminPanelView({
           [
             { id: 'members', label: 'Membros & Privilégios' },
             { id: 'games', label: `Jogos (${gamesWithStats.length})` },
+            {
+              id: 'covers',
+              label: `Capas reportadas (${openCoverReports.length})`,
+              highlight: openCoverReports.length > 0,
+            },
             { id: 'posts', label: `Publicações (${reviews.length + comments.length})` },
-          ] as { id: AdminSection; label: string }[]
+          ] as { id: AdminSection; label: string; highlight?: boolean }[]
         ).map((tab) => (
           <button
             key={tab.id}
@@ -303,7 +314,9 @@ export function AdminPanelView({
             className={`px-4 py-2 text-sm font-medium rounded-md transition-colors cursor-pointer ${
               section === tab.id
                 ? 'bg-[#F2F2EE] text-[#0C0D0C]'
-                : 'bg-[#141614] border border-[#262A26] text-[#A8ACA5] hover:text-[#F2F2EE]'
+                : tab.highlight
+                  ? 'bg-[#1D1910] border border-[#5A4419] text-[#FDE68A] hover:border-[#FBBF24]'
+                  : 'bg-[#141614] border border-[#262A26] text-[#A8ACA5] hover:text-[#F2F2EE]'
             }`}
           >
             {tab.label}
@@ -839,6 +852,130 @@ export function AdminPanelView({
         </div>
       )}
 
+      {/* SECTION 2.5: REPORTED COVERS QUEUE */}
+      {section === 'covers' && (
+        <div className="space-y-4">
+          {openCoverReports.length === 0 ? (
+            <div className="bg-[#141614] border border-[#262A26] p-10 text-center space-y-2">
+              <Flag className="w-6 h-6 text-[#4B5148] mx-auto" />
+              <p className="text-sm text-[#90968C]">
+                Nenhuma capa incorreta pendente de revisão. Quando algum membro reportar uma
+                capa, ela aparecerá aqui e no sino de notificações dos administradores.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[#232723] border border-[#3C331A] bg-[#141614]">
+              {openCoverReports.map((report) => {
+                const targetGame = gamesById.get(report.gameId) || null;
+                const liveReporter = membersById[report.reporterId];
+                const reporterName = liveReporter?.displayName || report.reporterName;
+                const reporterPhoto = liveReporter?.photoURL || '';
+
+                return (
+                  <div
+                    key={report.id}
+                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="flex items-start gap-3.5 min-w-0">
+                      <div className="w-12 shrink-0">
+                        <GameCover
+                          title={targetGame?.title || report.gameTitle}
+                          coverUrl={targetGame?.coverUrl ?? report.gameCoverUrl}
+                          compact
+                        />
+                      </div>
+                      <div className="min-w-0 space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => onSelectGame(report.gameId)}
+                            className="font-serif text-base font-medium text-[#F2F2EE] hover:text-[#4ADE80] transition-colors text-left cursor-pointer"
+                          >
+                            {targetGame?.title || report.gameTitle}
+                          </button>
+                          <span className="text-[11px] font-mono text-[#FBBF24] bg-[#241E10] border border-[#5A4419] px-2 py-0.5 rounded">
+                            Capa incorreta
+                          </span>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-[#A8ACA5]">
+                          <span>Reportado por</span>
+                          <button
+                            type="button"
+                            onClick={() => onSelectMember(report.reporterId)}
+                            className="inline-flex items-center gap-1.5 font-medium text-[#F2F2EE] hover:text-[#4ADE80] cursor-pointer"
+                          >
+                            <MemberAvatar
+                              name={reporterName}
+                              primarySrc={reporterPhoto}
+                              fallbackSrc={report.reporterPhotoURL}
+                              size="xs"
+                            />
+                            <span>{reporterName}</span>
+                          </button>
+                          <span className="text-[#787D75]">
+                            · {formatTimestamp(report.updatedAt || report.createdAt)}
+                          </span>
+                        </div>
+
+                        {report.note && (
+                          <p className="text-xs text-[#C8CBC4] bg-[#0C0D0C] border border-[#232723] px-3 py-2 rounded max-w-xl">
+                            “{report.note}”
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      {targetGame && (
+                        <button
+                          type="button"
+                          onClick={() => onEditGame(targetGame)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-[#FBBF24] text-[#0C0D0C] rounded-md hover:bg-[#FCD34D] transition-colors cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span>Ajustar capa</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        disabled={busyKey === `res-cov-${report.id}`}
+                        onClick={() =>
+                          runAction(
+                            `res-cov-${report.id}`,
+                            () => resolveCoverReport(report.id),
+                            `Reporte de capa de "${targetGame?.title || report.gameTitle}" marcado como resolvido.`,
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#142218] border border-[#22543D] text-[#4ADE80] hover:bg-[#193020] rounded-md transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Resolver</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyKey === `del-cov-${report.id}`}
+                        onClick={() =>
+                          runAction(
+                            `del-cov-${report.id}`,
+                            () => deleteCoverReport(report.id),
+                            'Reporte de capa removido.',
+                          )
+                        }
+                        aria-label="Excluir reporte"
+                        className="p-1.5 text-[#8C9288] hover:text-[#F87171] bg-[#0C0D0C] border border-[#2A2F2A] rounded-md cursor-pointer disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* SECTION 3: REVIEWS & COMMENTS MODERATION */}
       {section === 'posts' && (
         <div className="space-y-4">
@@ -914,12 +1051,20 @@ export function AdminPanelView({
                           </button>
                           <span>· {formatTimestamp(review.createdAt)}</span>
                         </div>
-                        <p className="font-serif text-base text-[#F2F2EE]">
-                          {review.headline}
-                        </p>
-                        <p className="text-xs text-[#A8ACA5] line-clamp-2 max-w-2xl">
-                          {review.body}
-                        </p>
+                        {review.ratingOnly || (!review.headline.trim() && !review.body.trim()) ? (
+                          <p className="text-xs italic text-[#90968C]">
+                            Optou apenas por dar nota ao jogo (sem crítica escrita).
+                          </p>
+                        ) : (
+                          <>
+                            <p className="font-serif text-base text-[#F2F2EE]">
+                              {review.headline}
+                            </p>
+                            <p className="text-xs text-[#A8ACA5] line-clamp-2 max-w-2xl">
+                              {review.body}
+                            </p>
+                          </>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2.5 shrink-0">

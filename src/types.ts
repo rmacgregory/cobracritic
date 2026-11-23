@@ -26,7 +26,27 @@ export const LIMITS = {
   HOURS_MAX: 10000,
   RELEASE_YEAR_MIN: 1970,
   RELEASE_YEAR_MAX: 2035,
+  EVENT_TITLE_MAX: 120,
+  EVENT_DESCRIPTION_MAX: 500,
+  EVENT_CATEGORIES_MAX: 30,
+  EVENT_CATEGORY_NAME_MAX: 100,
+  EVENT_NOMINEES_MAX: 16,
+  EVENT_NOMINEE_TITLE_MAX: 120,
+  COVER_REPORT_NOTE_MAX: 300,
 } as const;
+
+export const BAYESIAN_WEIGHT_PRIOR = 3;
+
+export function computeWeightedScore(
+  rawAverage: number,
+  reviewCount: number,
+  globalMean: number,
+): number {
+  if (reviewCount <= 0) return 0;
+  const m = BAYESIAN_WEIGHT_PRIOR;
+  const priorMean = Math.min(globalMean, 75);
+  return (reviewCount / (reviewCount + m)) * rawAverage + (m / (reviewCount + m)) * priorMean;
+}
 
 export const PLATFORMS = [
   'PC',
@@ -147,6 +167,7 @@ export interface Review {
   authorName: string;
   authorPhotoURL: string;
   score: number; // 0..100 integer
+  ratingOnly?: boolean;
   headline: string;
   body: string;
   platformPlayed: string;
@@ -198,8 +219,69 @@ export interface UserBan {
   createdAt?: Timestamp | null;
 }
 
+export type EventStatus = 'active' | 'inactive' | 'closed';
+
+export interface EventNominee {
+  id: string;
+  gameId: string;
+  title: string;
+  coverUrl: string;
+}
+
+export interface EventCategory {
+  id: string;
+  name: string;
+  nominees: EventNominee[];
+  winnerNomineeId: string;
+}
+
+export interface CobraEvent {
+  id: string;
+  title: string;
+  description: string;
+  status: EventStatus;
+  categories: EventCategory[];
+  createdBy: string;
+  createdByName: string;
+  visibility: 'group';
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export interface EventVote {
+  id: string;
+  eventId: string;
+  categoryId: string;
+  nomineeId: string;
+  nomineeTitle: string;
+  userId: string;
+  userName: string;
+  userPhotoURL: string;
+  visibility: 'group';
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
+export type CoverReportStatus = 'open' | 'resolved';
+
+export interface CoverReport {
+  id: string;
+  gameId: string;
+  gameTitle: string;
+  gameCoverUrl: string;
+  reporterId: string;
+  reporterName: string;
+  reporterPhotoURL: string;
+  note: string;
+  status: CoverReportStatus;
+  visibility: 'group';
+  createdAt?: Timestamp | null;
+  updatedAt?: Timestamp | null;
+}
+
 export interface GameWithStats extends Game {
   averageScore: number | null;
+  weightedScore: number | null;
   reviewCount: number;
   positiveCount: number;
   mixedCount: number;
@@ -222,6 +304,7 @@ export interface GameInput {
 
 export interface ReviewInput {
   score: number;
+  ratingOnly?: boolean;
   headline: string;
   body: string;
   platformPlayed: string;
@@ -402,4 +485,11 @@ export const STARTER_GAMES: GameInput[] = [
   },
 ];
 
-export type ActiveTab = 'catalog' | 'feed' | 'ranking' | 'members' | 'profile' | 'admin';
+export type ActiveTab =
+  | 'catalog'
+  | 'feed'
+  | 'events'
+  | 'ranking'
+  | 'members'
+  | 'profile'
+  | 'admin';
