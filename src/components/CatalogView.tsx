@@ -234,10 +234,10 @@ export function CatalogView({
     return (
       <main className="max-w-[1140px] mx-auto px-4 sm:px-8 py-14">
         <section className="max-w-2xl mx-auto text-center border border-[#262A26] bg-[#141614] px-8 py-14 space-y-6">
-          <p className="text-xs font-mono uppercase tracking-[0.16em] text-[#4ADE80]">
+          <p className="text-xs font-medium text-[#4ADE80]">
             Catálogo CobraCritic
           </p>
-          <h1 className="font-serif text-3xl sm:text-4xl font-medium text-[#F2F2EE]">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#F2F2EE]">
             Nenhum jogo cadastrado ainda
           </h1>
           <p className="text-sm sm:text-base text-[#A8ACA5] leading-relaxed">
@@ -294,17 +294,17 @@ export function CatalogView({
 
             <div className="lg:col-span-9 flex flex-col justify-between gap-5">
               <div className="space-y-3">
-                <p className="text-xs font-mono uppercase tracking-[0.15em] text-[#4ADE80]">
+                <p className="text-xs font-medium text-[#4ADE80]">
                   {featuredGame.averageScore !== null
                     ? 'Top 1 dos Cobras (nota + volume)'
                     : 'Recém-adicionado ao catálogo'}
                   {' · '}
-                  <span className="text-[#90968C]">
+                  <span className="text-[#90968C] font-normal">
                     {formatReleaseDate(featuredGame.releaseDate)}
                   </span>
                 </p>
 
-                <h1 className="font-serif text-2xl sm:text-3xl lg:text-4xl font-medium tracking-tight text-[#F2F2EE] leading-[1.12]">
+                <h1 className="font-display text-2xl sm:text-3xl lg:text-4xl font-semibold tracking-tight text-[#F2F2EE] leading-[1.12]">
                   {featuredGame.title}
                 </h1>
 
@@ -393,7 +393,7 @@ export function CatalogView({
       <section aria-label="Catálogo completo" className="space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="font-serif text-2xl sm:text-3xl font-medium text-[#F2F2EE]">
+            <h2 className="font-display text-2xl sm:text-3xl font-semibold text-[#F2F2EE]">
               {selectedGenre !== 'all'
                 ? `Jogos de ${selectedGenre}`
                 : selectedPlatform !== 'all'
@@ -641,7 +641,7 @@ export function CatalogView({
                   <button
                     type="button"
                     onClick={() => onSelectGame(game.id)}
-                    className="font-serif text-sm font-medium text-[#F2F2EE] hover:text-[#4ADE80] transition-colors truncate text-left cursor-pointer"
+                    className="font-display text-sm font-semibold text-[#F2F2EE] hover:text-[#4ADE80] transition-colors truncate text-left cursor-pointer"
                   >
                     {game.title}
                   </button>
@@ -699,7 +699,7 @@ export function CatalogView({
                         <button
                           type="button"
                           onClick={() => onSelectGame(game.id)}
-                          className="font-serif text-sm font-medium text-[#F2F2EE] leading-snug group-hover:text-[#4ADE80] transition-colors text-left cursor-pointer line-clamp-2"
+                          className="font-display text-sm font-semibold text-[#F2F2EE] leading-snug group-hover:text-[#4ADE80] transition-colors text-left cursor-pointer line-clamp-2"
                         >
                           {game.title}
                         </button>

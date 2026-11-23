@@ -160,7 +160,7 @@ export function NotificationsBell({
                 <MessageSquare className="w-5 h-5 text-[#4B5148] mx-auto" />
                 <p className="text-xs text-[#90968C] leading-relaxed">
                   Nenhuma notificação por enquanto. Quando outros membros comentarem
-                  em uma avaliação sua
+                  em uma avaliação sua, responderem um comentário seu
                   {isAdmin ? ' ou reportarem uma capa incorreta' : ''}, ela aparecerá
                   aqui em tempo real.
                 </p>
@@ -289,7 +289,9 @@ export function NotificationsBell({
                               <span className="font-semibold text-[#F2F2EE]">
                                 {item.authorName}
                               </span>{' '}
-                              comentou na sua avaliação de{' '}
+                              {item.isReply
+                                ? 'respondeu ao seu comentário em'
+                                : 'comentou na sua avaliação de'}{' '}
                               <span className="font-semibold text-[#F2F2EE]">
                                 {item.gameTitle}
                               </span>
@@ -403,7 +405,9 @@ export function NotificationsBell({
               <span className="font-semibold text-[#4ADE80]">
                 {latestLiveNotification.authorName}
               </span>{' '}
-              comentou na sua avaliação de{' '}
+              {latestLiveNotification.isReply
+                ? 'respondeu ao seu comentário em'
+                : 'comentou na sua avaliação de'}{' '}
               <span className="font-semibold text-[#F2F2EE]">
                 {latestLiveNotification.gameTitle}
               </span>

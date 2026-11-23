@@ -89,10 +89,10 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
   return (
     <main className="max-w-[1140px] mx-auto px-4 sm:px-8 py-8 space-y-12">
       <div className="border-b border-[#232723] pb-6">
-        <p className="text-xs font-mono uppercase tracking-[0.15em] text-[#4ADE80]">
+        <p className="text-xs font-medium text-[#4ADE80]">
           Pontuação média exclusiva dos Cobras
         </p>
-        <h1 className="font-serif text-3xl sm:text-4xl font-medium text-[#F2F2EE] mt-1">
+        <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#F2F2EE] mt-1">
           Ranking &amp; Estatísticas
         </h1>
         <p className="text-sm text-[#90968C] mt-1.5 max-w-2xl">
@@ -104,7 +104,7 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
       {/* Main Ranking Table */}
       <section aria-label="Melhores jogos segundo o grupo" className="space-y-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-serif text-2xl font-medium text-[#F2F2EE]">
+          <h2 className="font-display text-2xl font-semibold text-[#F2F2EE]">
             Classificação Geral (Top Jogos)
           </h2>
           <p className="text-xs text-[#787D75]">

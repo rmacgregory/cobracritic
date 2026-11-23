@@ -185,6 +185,8 @@ export interface ReviewComment {
   authorName: string;
   authorPhotoURL: string;
   body: string;
+  parentCommentId?: string;
+  replyToAuthorName?: string;
   visibility: 'group';
   createdAt?: Timestamp | null;
 }

@@ -236,17 +236,17 @@ export function GameDetailView({
         <div className="lg:col-span-8 flex flex-col justify-between gap-8">
           <div className="space-y-5">
             <div>
-              <p className="text-xs font-mono uppercase tracking-[0.15em] text-[#8C9288]">
+              <p className="text-xs text-[#8C9288]">
                 Ficha CobraCritic · Cadastrado por{' '}
                 <button
                   type="button"
                   onClick={() => onSelectAuthor(game.createdBy)}
-                  className="text-[#4ADE80] hover:underline cursor-pointer"
+                  className="text-[#4ADE80] font-medium hover:underline cursor-pointer"
                 >
                   {game.createdByName}
                 </button>
               </p>
-              <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-medium text-[#F2F2EE] mt-2 leading-[1.1]">
+              <h1 className="font-display text-3xl sm:text-4xl lg:text-5xl font-semibold text-[#F2F2EE] mt-2 leading-[1.08]">
                 {game.title}
               </h1>
             </div>
@@ -353,7 +353,7 @@ export function GameDetailView({
       {/* Reviews & Discussion Section */}
       <section aria-label="Críticas dos Cobras" className="space-y-6">
         <div>
-          <h2 className="font-serif text-2xl sm:text-3xl font-medium text-[#F2F2EE]">
+          <h2 className="font-display text-2xl sm:text-3xl font-semibold text-[#F2F2EE]">
             Críticas dos Cobras
           </h2>
           <p className="text-sm text-[#90968C] mt-1">
@@ -363,7 +363,7 @@ export function GameDetailView({
 
         {game.reviews.length === 0 ? (
           <div className="border border-[#262A26] bg-[#141614] px-8 py-12 text-center space-y-4">
-            <p className="font-serif text-xl text-[#F2F2EE]">
+            <p className="font-display text-xl font-semibold text-[#F2F2EE]">
               Seja o primeiro Cobra a avaliar {game.title}
             </p>
             <p className="text-sm text-[#90968C] max-w-md mx-auto">

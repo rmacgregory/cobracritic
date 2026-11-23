@@ -80,6 +80,7 @@ export interface CommentNotification {
   authorPhotoURL: string;
   authorFallbackPhotoURL: string;
   body: string;
+  isReply?: boolean;
   createdAt?: ReviewComment['createdAt'];
   unread: boolean;
 }
@@ -191,7 +192,12 @@ interface VereditoContextValue {
   deleteGame: (gameId: string) => Promise<void>;
   saveReview: (game: Game, input: ReviewInput) => Promise<void>;
   deleteReview: (reviewId: string) => Promise<void>;
-  addComment: (reviewId: string, gameId: string, body: string) => Promise<void>;
+  addComment: (
+    reviewId: string,
+    gameId: string,
+    body: string,
+    replyOptions?: { parentCommentId: string; replyToAuthorName?: string },
+  ) => Promise<void>;
   deleteComment: (commentId: string) => Promise<void>;
   toggleReaction: (reviewId: string) => Promise<void>;
   seedStarterGames: () => Promise<void>;
@@ -204,6 +210,7 @@ interface VereditoContextValue {
     title: string;
     description: string;
     status: EventStatus;
+    categories?: EventCategory[];
   }) => Promise<string>;
   updateEvent: (
     eventId: string,
@@ -258,6 +265,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   const seenCoverReportIdsRef = useRef<Set<string>>(new Set());
   const coverReportsInitializedRef = useRef(false);
   const myReviewIdsRef = useRef<Set<string>>(new Set());
+  const myCommentIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (nextUser) => {
@@ -334,6 +342,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         commentsInitializedRef.current = false;
         seenCoverReportIdsRef.current = new Set();
         coverReportsInitializedRef.current = false;
+        myReviewIdsRef.current = new Set();
+        myCommentIdsRef.current = new Set();
       }
     });
 
@@ -441,9 +451,13 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
               if (!seenCommentIdsRef.current.has(docId)) {
                 seenCommentIdsRef.current.add(docId);
                 const data = change.doc.data() as Omit<ReviewComment, 'id'>;
+                const isReplyToMyComment = Boolean(
+                  data.parentCommentId &&
+                    myCommentIdsRef.current.has(data.parentCommentId),
+                );
                 if (
                   data.authorId !== user.uid &&
-                  myReviewIdsRef.current.has(data.reviewId)
+                  (myReviewIdsRef.current.has(data.reviewId) || isReplyToMyComment)
                 ) {
                   setLiveNotifId(docId);
                 }
@@ -717,15 +731,35 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     );
   }, [reviews, user]);
 
+  useEffect(() => {
+    if (!user) {
+      myCommentIdsRef.current = new Set();
+      return;
+    }
+    myCommentIdsRef.current = new Set(
+      comments.filter((c) => c.authorId === user.uid).map((c) => c.id),
+    );
+  }, [comments, user]);
+
   const commentNotifications = useMemo<CommentNotification[]>(() => {
     if (!user) return [];
+    const allReviewsById = new Map<string, Review>();
     const myReviewsById = new Map<string, Review>();
     for (const r of reviews) {
+      allReviewsById.set(r.id, r);
       if (r.authorId === user.uid) {
         myReviewsById.set(r.id, r);
       }
     }
-    if (myReviewsById.size === 0) return [];
+
+    const myCommentsById = new Map<string, ReviewComment>();
+    for (const c of comments) {
+      if (c.authorId === user.uid) {
+        myCommentsById.set(c.id, c);
+      }
+    }
+
+    if (myReviewsById.size === 0 && myCommentsById.size === 0) return [];
 
     const gamesById = new Map<string, Game>();
     for (const g of games) {
@@ -735,14 +769,24 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const readIdSet = new Set(notifReadState.readIds);
 
     return comments
-      .filter((c) => c.authorId !== user.uid && myReviewsById.has(c.reviewId))
+      .filter((c) => {
+        if (c.authorId === user.uid) return false;
+        const onMyReview = myReviewsById.has(c.reviewId);
+        const replyToMyComment = Boolean(
+          c.parentCommentId && myCommentsById.has(c.parentCommentId),
+        );
+        return onMyReview || replyToMyComment;
+      })
       .sort((a, b) => getTimeMillis(b.createdAt) - getTimeMillis(a.createdAt))
       .map((c) => {
-        const targetReview = myReviewsById.get(c.reviewId);
+        const targetReview = allReviewsById.get(c.reviewId);
         const liveAuthor = membersById[c.authorId];
         const createdMs = getTimeMillis(c.createdAt);
         const unread =
           !readIdSet.has(c.id) && createdMs > notifReadState.readAllBeforeMs;
+        const isReply = Boolean(
+          c.parentCommentId && myCommentsById.has(c.parentCommentId),
+        );
 
         return {
           id: c.id,
@@ -755,6 +799,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
           authorPhotoURL: liveAuthor?.photoURL || '',
           authorFallbackPhotoURL: c.authorPhotoURL || '',
           body: c.body,
+          isReply,
           createdAt: c.createdAt,
           unread,
         };
@@ -1208,25 +1253,43 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const addComment = async (reviewId: string, gameId: string, body: string) => {
+  const addComment = async (
+    reviewId: string,
+    gameId: string,
+    body: string,
+    replyOptions?: { parentCommentId: string; replyToAuthorName?: string },
+  ) => {
     if (!user || isBanned) return;
     const cleanBody = body.trim().slice(0, LIMITS.COMMENT_BODY_MAX);
     if (!cleanBody) return;
 
     const commentId = createSafeId('cmt');
     const path = `comments/${commentId}`;
+    const payload: Record<string, unknown> = {
+      reviewId,
+      gameId,
+      authorId: user.uid,
+      authorName: getCurrentDisplayName(),
+      authorPhotoURL:
+        sanitizeOptionalUrl(profile?.photoURL) || sanitizeOptionalUrl(user.photoURL),
+      body: cleanBody,
+      visibility: 'group' as const,
+      createdAt: serverTimestamp(),
+    };
+
+    const cleanParentId = replyOptions?.parentCommentId?.trim();
+    if (cleanParentId) {
+      payload.parentCommentId = cleanParentId;
+      const cleanReplyAuthor = replyOptions?.replyToAuthorName
+        ?.trim()
+        .slice(0, LIMITS.DISPLAY_NAME_MAX);
+      if (cleanReplyAuthor) {
+        payload.replyToAuthorName = cleanReplyAuthor;
+      }
+    }
+
     try {
-      await setDoc(doc(db, 'comments', commentId), {
-        reviewId,
-        gameId,
-        authorId: user.uid,
-        authorName: getCurrentDisplayName(),
-        authorPhotoURL:
-          sanitizeOptionalUrl(profile?.photoURL) || sanitizeOptionalUrl(user.photoURL),
-        body: cleanBody,
-        visibility: 'group' as const,
-        createdAt: serverTimestamp(),
-      });
+      await setDoc(doc(db, 'comments', commentId), payload);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
     }
@@ -1413,6 +1476,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     title: string;
     description: string;
     status: EventStatus;
+    categories?: EventCategory[];
   }): Promise<string> => {
     if (!user || !isAdmin) {
       throw new Error('Apenas administradores podem criar eventos.');
@@ -1424,6 +1488,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const cleanDesc = input.description.trim().slice(0, LIMITS.EVENT_DESCRIPTION_MAX);
     const safeStatus: EventStatus =
       input.status === 'active' || input.status === 'closed' ? input.status : 'inactive';
+    const cleanCategories = sanitizeEventCategories(input.categories || []);
 
     const eventId = createSafeId('evt');
     const path = `events/${eventId}`;
@@ -1432,7 +1497,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         title: cleanTitle,
         description: cleanDesc,
         status: safeStatus,
-        categories: [],
+        categories: cleanCategories,
         createdBy: user.uid,
         createdByName: getCurrentDisplayName(),
         visibility: 'group' as const,

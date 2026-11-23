@@ -244,10 +244,10 @@ export function ProfileView({ onSelectGame, onEditReview }: ProfileViewProps) {
           </div>
 
           <div className="min-w-0">
-            <p className="text-xs font-mono uppercase tracking-[0.15em] text-[#4ADE80]">
+            <p className="text-xs font-medium text-[#4ADE80]">
               Perfil do Cobra
             </p>
-            <h1 className="font-serif text-3xl sm:text-4xl font-medium text-[#F2F2EE] mt-0.5 truncate">
+            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#F2F2EE] mt-0.5 truncate">
               {shownName}
             </h1>
             <div className="flex flex-wrap items-center gap-3 mt-1.5">

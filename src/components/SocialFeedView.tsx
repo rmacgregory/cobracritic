@@ -73,10 +73,10 @@ export function SocialFeedView({
   return (
     <main className="max-w-[1140px] mx-auto px-4 sm:px-8 py-8 space-y-8">
       <div className="border-b border-[#232723] pb-6">
-        <p className="text-xs font-mono uppercase tracking-[0.15em] text-[#4ADE80]">
+        <p className="text-xs font-medium text-[#4ADE80]">
           Conversas em tempo real
         </p>
-        <h1 className="font-serif text-3xl sm:text-4xl font-medium text-[#F2F2EE] mt-1">
+        <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#F2F2EE] mt-1">
           Feed Social dos Cobras
         </h1>
         <p className="text-sm text-[#90968C] mt-1.5 max-w-2xl">
@@ -188,7 +188,7 @@ export function SocialFeedView({
         {/* Right Sidebar */}
         <aside className="lg:col-span-4 space-y-6">
           <div className="bg-[#141614] border border-[#262A26] p-6 space-y-4">
-            <h2 className="font-serif text-lg font-medium text-[#F2F2EE]">
+            <h2 className="font-display text-lg font-semibold text-[#F2F2EE]">
               Pulso dos Cobras
             </h2>
             <dl className="grid grid-cols-2 gap-4 pt-2 border-t border-[#222622]">
@@ -220,7 +220,7 @@ export function SocialFeedView({
           </div>
 
           <div className="bg-[#141614] border border-[#262A26] p-6 space-y-4">
-            <h2 className="font-serif text-lg font-medium text-[#F2F2EE]">
+            <h2 className="font-display text-lg font-semibold text-[#F2F2EE]">
               Comentários Recentes
             </h2>
             {recentComments.length === 0 ? (

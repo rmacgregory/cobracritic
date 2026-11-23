@@ -298,6 +298,19 @@
           "maxLength": 1000,
           "description": "Comment text."
         },
+        "parentCommentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Optional ID of the root parent comment when this comment is a threaded reply."
+        },
+        "replyToAuthorName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Optional display name of the member being replied to inside the thread."
+        },
         "visibility": {
           "type": "string",
           "enum": ["group"],

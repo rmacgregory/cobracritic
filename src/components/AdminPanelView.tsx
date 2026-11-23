@@ -204,11 +204,11 @@ export function AdminPanelView({
       {/* Header */}
       <div className="border-b border-[#232723] pb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-mono uppercase tracking-[0.15em] text-[#4ADE80] flex items-center gap-1.5">
+          <p className="text-xs font-medium text-[#4ADE80] flex items-center gap-1.5">
             <Shield className="w-3.5 h-3.5" />
             <span>Moderação &amp; Governança</span>
           </p>
-          <h1 className="font-serif text-3xl sm:text-4xl font-medium text-[#F2F2EE] mt-1">
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#F2F2EE] mt-1">
             Painel Admin
           </h1>
           <p className="text-sm text-[#90968C] mt-1.5 max-w-2xl">

@@ -1,5 +1,16 @@
-import React, { useState } from 'react';
-import { MessageSquare, Pencil, Send, Star, ThumbsUp, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronRight,
+  CornerDownRight,
+  MessageSquare,
+  Pencil,
+  Send,
+  Star,
+  ThumbsUp,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import {
   LIMITS,
@@ -7,6 +18,7 @@ import {
   getScoreMeta,
   type Game,
   type Review,
+  type ReviewComment,
 } from '../types';
 import { GameCover } from './GameCover';
 import { MemberAvatar } from './MemberAvatar';
@@ -54,8 +66,59 @@ export function ReviewCard({
   const [commentsOpen, setCommentsOpen] = useState(defaultCommentsOpen);
   const [commentText, setCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<{
+    rootCommentId: string;
+    targetAuthorName: string;
+  } | null>(null);
+  const [replyText, setReplyText] = useState('');
+  const [submittingReply, setSubmittingReply] = useState(false);
+  const [collapsedThreads, setCollapsedThreads] = useState<Record<string, boolean>>({});
   const [togglingReaction, setTogglingReaction] = useState(false);
   const [confirmDeleteReview, setConfirmDeleteReview] = useState(false);
+  const replyInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (replyingTo) {
+      replyInputRef.current?.focus();
+    }
+  }, [replyingTo]);
+
+  const { rootComments, repliesByRootId } = useMemo(() => {
+    const byId = new Map<string, ReviewComment>();
+    for (const c of comments) {
+      byId.set(c.id, c);
+    }
+
+    const roots: ReviewComment[] = [];
+    const repliesMap = new Map<string, ReviewComment[]>();
+
+    for (const c of comments) {
+      if (!c.parentCommentId || !byId.has(c.parentCommentId)) {
+        // Root comment (or orphaned reply whose parent was deleted)
+        roots.push(c);
+        continue;
+      }
+
+      // Walk up to top-level root so discussions stay cleanly grouped under the parent comment
+      let rootId = c.parentCommentId;
+      const visited = new Set<string>([c.id]);
+      while (rootId && byId.has(rootId) && !visited.has(rootId)) {
+        visited.add(rootId);
+        const parent = byId.get(rootId);
+        if (parent?.parentCommentId && byId.has(parent.parentCommentId)) {
+          rootId = parent.parentCommentId;
+        } else {
+          break;
+        }
+      }
+
+      const bucket = repliesMap.get(rootId) || [];
+      bucket.push(c);
+      repliesMap.set(rootId, bucket);
+    }
+
+    return { rootComments: roots, repliesByRootId: repliesMap };
+  }, [comments]);
 
   const displayTitle = game?.title || review.gameTitle;
   const displayCover = game?.coverUrl ?? review.gameCoverUrl;
@@ -83,6 +146,37 @@ export function ReviewCard({
     }
   };
 
+  const handleOpenReply = (rootCommentId: string, targetAuthorName: string) => {
+    setCommentsOpen(true);
+    setCollapsedThreads((prev) => ({ ...prev, [rootCommentId]: false }));
+    setReplyingTo({ rootCommentId, targetAuthorName });
+    setReplyText('');
+  };
+
+  const handleReplySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!replyingTo || !replyText.trim() || submittingReply) return;
+    setSubmittingReply(true);
+    try {
+      await addComment(review.id, review.gameId, replyText.trim(), {
+        parentCommentId: replyingTo.rootCommentId,
+        replyToAuthorName: replyingTo.targetAuthorName,
+      });
+      setReplyText('');
+      setReplyingTo(null);
+      setCollapsedThreads((prev) => ({ ...prev, [replyingTo.rootCommentId]: false }));
+    } finally {
+      setSubmittingReply(false);
+    }
+  };
+
+  const toggleThreadCollapse = (rootCommentId: string) => {
+    setCollapsedThreads((prev) => ({
+      ...prev,
+      [rootCommentId]: !prev[rootCommentId],
+    }));
+  };
+
   const handleToggleAgree = async () => {
     if (togglingReaction) return;
     setTogglingReaction(true);
@@ -107,7 +201,7 @@ export function ReviewCard({
               <GameCover title={displayTitle} coverUrl={displayCover} compact />
             </div>
             <div className="min-w-0">
-              <p className="font-serif text-base font-semibold text-[#F2F2EE] group-hover:text-[#4ADE80] transition-colors truncate">
+              <p className="font-display text-base font-semibold text-[#F2F2EE] group-hover:text-[#4ADE80] transition-colors truncate">
                 {displayTitle}
               </p>
               <p className="text-xs text-[#8C9288] mt-0.5 truncate">
@@ -233,7 +327,7 @@ export function ReviewCard({
         </div>
       ) : (
         <div className="space-y-2.5 max-w-prose">
-          <h3 className="font-serif text-xl font-medium text-[#F2F2EE] leading-snug">
+          <h3 className="font-display text-xl font-semibold text-[#F2F2EE] leading-snug">
             {review.headline}
           </h3>
           <p className="text-[15px] text-[#C8CBC4] leading-[1.7] whitespace-pre-line">
@@ -292,79 +386,203 @@ export function ReviewCard({
       {/* Social Comments Thread */}
       {commentsOpen && (
         <div className="pt-4 border-t border-[#222622] space-y-4">
-          {comments.length > 0 && (
-            <ul className="space-y-3">
-              {comments.map((comment) => {
-                const canDeleteComment = Boolean(
-                  user && (comment.authorId === user.uid || isAdmin),
-                );
-                const liveCommenter = membersById[comment.authorId];
-                const commentAuthorName =
-                  liveCommenter?.displayName || comment.authorName;
-                const commentPrimaryPhoto =
-                  liveCommenter?.photoURL ||
-                  (comment.authorId === user?.uid ? user?.photoURL || '' : '');
-                const commentFallbackPhoto = comment.authorPhotoURL || '';
+          {rootComments.length > 0 && (
+            <ul className="space-y-4">
+              {rootComments.map((comment) => {
+                const replies = repliesByRootId.get(comment.id) || [];
+                const isCollapsed = Boolean(collapsedThreads[comment.id]);
+                const isReplyingHere = replyingTo?.rootCommentId === comment.id;
 
-                const avatarNode = (
-                  <MemberAvatar
-                    name={commentAuthorName}
-                    primarySrc={commentPrimaryPhoto}
-                    fallbackSrc={commentFallbackPhoto}
-                    size="xs"
-                  />
-                );
+                const renderCommentRow = (
+                  item: ReviewComment,
+                  rootCommentId: string,
+                  isNested: boolean,
+                ) => {
+                  const canDeleteComment = Boolean(
+                    user && (item.authorId === user.uid || isAdmin),
+                  );
+                  const liveCommenter = membersById[item.authorId];
+                  const commentAuthorName =
+                    liveCommenter?.displayName || item.authorName;
+                  const commentPrimaryPhoto =
+                    liveCommenter?.photoURL ||
+                    (item.authorId === user?.uid ? user?.photoURL || '' : '');
+                  const commentFallbackPhoto = item.authorPhotoURL || '';
+                  const showReplyTarget = Boolean(
+                    item.replyToAuthorName && (isNested || item.parentCommentId),
+                  );
 
-                return (
-                  <li
-                    key={comment.id}
-                    className="flex items-start justify-between gap-3 text-sm"
-                  >
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      {onSelectAuthor ? (
+                  const avatarNode = (
+                    <MemberAvatar
+                      name={commentAuthorName}
+                      primarySrc={commentPrimaryPhoto}
+                      fallbackSrc={commentFallbackPhoto}
+                      size="xs"
+                    />
+                  );
+
+                  return (
+                    <div className="flex items-start justify-between gap-3 text-sm">
+                      <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                        {onSelectAuthor ? (
+                          <button
+                            type="button"
+                            onClick={() => onSelectAuthor(item.authorId)}
+                            aria-label={`Ver perfil de ${commentAuthorName}`}
+                            className="mt-0.5 shrink-0 rounded-full cursor-pointer hover:opacity-90 transition-opacity"
+                          >
+                            {avatarNode}
+                          </button>
+                        ) : (
+                          <div className="mt-0.5 shrink-0">{avatarNode}</div>
+                        )}
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <p className="text-xs text-[#8C9288] flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                            {onSelectAuthor ? (
+                              <button
+                                type="button"
+                                onClick={() => onSelectAuthor(item.authorId)}
+                                className="font-semibold text-[#F2F2EE] hover:text-[#4ADE80] transition-colors cursor-pointer"
+                              >
+                                {commentAuthorName}
+                              </button>
+                            ) : (
+                              <span className="font-semibold text-[#F2F2EE]">
+                                {commentAuthorName}
+                              </span>
+                            )}
+                            {showReplyTarget && (
+                              <span className="inline-flex items-center gap-1 text-[11px] text-[#7F9A86]">
+                                <CornerDownRight className="w-3 h-3 shrink-0" />
+                                <span>{item.replyToAuthorName}</span>
+                              </span>
+                            )}
+                            <span aria-hidden="true">·</span>
+                            <span>{formatTimestamp(item.createdAt)}</span>
+                          </p>
+                          <p className="text-sm text-[#C8CBC4] leading-relaxed break-words">
+                            {item.body}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-3 pt-0.5">
+                            {user && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleOpenReply(rootCommentId, commentAuthorName)
+                                }
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-[#8C9288] hover:text-[#4ADE80] transition-colors cursor-pointer"
+                              >
+                                <CornerDownRight className="w-3 h-3" />
+                                <span>Responder</span>
+                              </button>
+                            )}
+                            {!isNested && replies.length >= 2 && (
+                              <button
+                                type="button"
+                                onClick={() => toggleThreadCollapse(comment.id)}
+                                className="inline-flex items-center gap-1 text-[11px] font-medium text-[#787D75] hover:text-[#F2F2EE] transition-colors cursor-pointer"
+                              >
+                                {isCollapsed ? (
+                                  <ChevronRight className="w-3 h-3" />
+                                ) : (
+                                  <ChevronDown className="w-3 h-3" />
+                                )}
+                                <span className="tabular-nums">
+                                  {isCollapsed
+                                    ? `Ver ${replies.length} respostas`
+                                    : `Ocultar ${replies.length} respostas`}
+                                </span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      {canDeleteComment && (
                         <button
                           type="button"
-                          onClick={() => onSelectAuthor(comment.authorId)}
-                          aria-label={`Ver perfil de ${commentAuthorName}`}
-                          className="mt-0.5 shrink-0 rounded-full cursor-pointer hover:opacity-90 transition-opacity"
+                          onClick={() => deleteComment(item.id)}
+                          aria-label="Remover comentário"
+                          className="p-1 text-[#787D75] hover:text-[#F87171] transition-colors shrink-0 cursor-pointer"
                         >
-                          {avatarNode}
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
-                      ) : (
-                        <div className="mt-0.5 shrink-0">{avatarNode}</div>
                       )}
-                      <div className="min-w-0 space-y-0.5">
-                        <p className="text-xs text-[#8C9288] flex flex-wrap items-center gap-x-1.5">
-                          {onSelectAuthor ? (
-                            <button
-                              type="button"
-                              onClick={() => onSelectAuthor(comment.authorId)}
-                              className="font-semibold text-[#F2F2EE] hover:text-[#4ADE80] transition-colors cursor-pointer"
-                            >
-                              {commentAuthorName}
-                            </button>
-                          ) : (
-                            <span className="font-semibold text-[#F2F2EE]">
-                              {commentAuthorName}
-                            </span>
-                          )}
-                          <span aria-hidden="true">·</span>
-                          <span>{formatTimestamp(comment.createdAt)}</span>
-                        </p>
-                        <p className="text-sm text-[#C8CBC4] leading-relaxed break-words">
-                          {comment.body}
-                        </p>
-                      </div>
                     </div>
-                    {canDeleteComment && (
-                      <button
-                        type="button"
-                        onClick={() => deleteComment(comment.id)}
-                        aria-label="Remover comentário"
-                        className="p-1 text-[#787D75] hover:text-[#F87171] transition-colors shrink-0 cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                  );
+                };
+
+                return (
+                  <li key={comment.id} className="space-y-2.5">
+                    {renderCommentRow(comment, comment.id, false)}
+
+                    {/* Nested replies thread under parent comment */}
+                    {replies.length > 0 && !isCollapsed && (
+                      <ul className="ml-6 sm:ml-7 pl-3.5 border-l border-[#262D26] space-y-3 pt-0.5">
+                        {replies.map((reply) => (
+                          <li key={reply.id}>
+                            {renderCommentRow(reply, comment.id, true)}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {/* Inline reply composer anchored to this parent thread */}
+                    {isReplyingHere && replyingTo && (
+                      <div className="ml-6 sm:ml-7 pl-3.5 border-l border-[#2C4A34] space-y-2 pt-1">
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-[#8C9288]">
+                          <span className="inline-flex items-center gap-1.5 min-w-0 truncate">
+                            <CornerDownRight className="w-3 h-3 text-[#4ADE80] shrink-0" />
+                            <span className="truncate">
+                              Respondendo a{' '}
+                              <strong className="text-[#F2F2EE] font-medium">
+                                {replyingTo.targetAuthorName}
+                              </strong>
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReplyingTo(null);
+                              setReplyText('');
+                            }}
+                            aria-label="Cancelar resposta"
+                            className="inline-flex items-center gap-1 text-[#787D75] hover:text-[#F2F2EE] transition-colors shrink-0 cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>Cancelar</span>
+                          </button>
+                        </div>
+
+                        <form
+                          onSubmit={handleReplySubmit}
+                          className="flex items-center gap-2"
+                        >
+                          <input
+                            ref={replyInputRef}
+                            type="text"
+                            maxLength={LIMITS.COMMENT_BODY_MAX}
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                setReplyingTo(null);
+                                setReplyText('');
+                              }
+                            }}
+                            placeholder={`Responder a ${replyingTo.targetAuthorName}...`}
+                            aria-label={`Responder a ${replyingTo.targetAuthorName}`}
+                            className="flex-1 px-3 py-1.5 text-xs sm:text-sm bg-[#0C0D0C] border border-[#2C4A34] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#4ADE80]"
+                          />
+                          <button
+                            type="submit"
+                            disabled={!replyText.trim() || submittingReply}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-[#4ADE80] text-[#0C0D0C] rounded-md hover:bg-[#6EE79E] disabled:opacity-40 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                          >
+                            <Send className="w-3 h-3" />
+                            <span>Responder</span>
+                          </button>
+                        </form>
+                      </div>
                     )}
                   </li>
                 );

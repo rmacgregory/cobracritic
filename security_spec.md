@@ -14,7 +14,7 @@
 5. **One Review Per Friend Per Game**: `/reviews/{reviewId}` enforces `reviewId == incoming().gameId + '_' + request.auth.uid`, preventing duplicate rating manipulation of the group's average score.
 6. **Referential Integrity (Global Consistency)**:
    - A `Review` cannot be created unless `/games/{gameId}` exists.
-   - A `ReviewComment` cannot be created unless `/reviews/{reviewId}` exists.
+   - A `ReviewComment` cannot be created unless `/reviews/{reviewId}` exists, and if `parentCommentId` is set, `/comments/{parentCommentId}` must exist and belong to the same `reviewId`.
    - A `ReviewReaction` cannot be created unless `/reviews/{reviewId}` exists, and enforces `reactionId == incoming().reviewId + '_' + request.auth.uid`.
 7. **Identity & Temporal Integrity**:
    - Creator/author UIDs (`uid`, `createdBy`, `authorId`, `userId`, `grantedBy`, `bannedBy`) must equal `request.auth.uid` on create and remain immutable on update.
