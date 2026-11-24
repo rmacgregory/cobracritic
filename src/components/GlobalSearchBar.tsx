@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
+import { getMemberBadgeMeta } from '../types';
 import { GameCover } from './GameCover';
 import { ScoreBadge } from './ScoreBadge';
 
@@ -206,7 +207,7 @@ export function GlobalSearchBar({
                                 <p className="text-xs text-[#8C9288] truncate">
                                   {(member.topFiveGames || []).length > 0
                                     ? `Top 1: ${member.topFiveGames?.[0]}`
-                                    : 'Membro dos Cobras'}
+                                    : getMemberBadgeMeta(member.memberBadge).label}
                                 </p>
                               </div>
                             </div>

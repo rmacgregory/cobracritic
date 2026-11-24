@@ -16,8 +16,11 @@ import {
   GAME_PLAY_STATUS_META,
   GAME_PROGRESS_STATUS_LIST,
   LIMITS,
+  MEMBER_BADGE_META,
+  getMemberBadgeMeta,
   type GamePlayStatus,
   type GameWithStats,
+  type MemberBadge,
   type Review,
   type UserProfile,
 } from '../types';
@@ -63,6 +66,7 @@ export function MembersView({
     userGameStatuses,
     grantAdmin,
     revokeAdmin,
+    updateMemberBadge,
     banUser,
     unbanUser,
   } = useVeredito();
@@ -223,8 +227,10 @@ export function MembersView({
             )}
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="text-xs font-mono text-[#4ADE80]">
-                  Membro dos Cobras
+                <p
+                  className={`text-xs font-mono ${getMemberBadgeMeta(activeMember.memberBadge).textClass}`}
+                >
+                  {getMemberBadgeMeta(activeMember.memberBadge).label}
                 </p>
                 {adminUids.has(activeMember.uid) && (
                   <span className="text-[11px] font-mono text-[#4ADE80] bg-[#16291D] border border-[#22543D] px-2 py-0.5 rounded">
@@ -246,75 +252,114 @@ export function MembersView({
                 </p>
               )}
 
-              {isAdmin && user?.uid !== activeMember.uid && (
+              {isAdmin && (
                 <div className="pt-2 space-y-2.5">
                   <div className="flex flex-wrap items-center gap-2">
-                    {!bansByUid[activeMember.uid] && (
-                      adminUids.has(activeMember.uid) ? (
-                        <button
-                          type="button"
-                          disabled={modBusy}
-                          onClick={async () => {
-                            setModBusy(true);
-                            try {
-                              await revokeAdmin(activeMember.uid);
-                            } finally {
-                              setModBusy(false);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#0C0D0C] border border-[#2C312C] text-[#A8ACA5] hover:text-[#FBBF24] rounded-md cursor-pointer disabled:opacity-50"
-                        >
-                          <ShieldOff className="w-3.5 h-3.5" />
-                          <span>Remover Admin</span>
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={modBusy}
-                          onClick={async () => {
-                            setModBusy(true);
-                            try {
-                              await grantAdmin(activeMember.uid, activeMember.displayName);
-                            } finally {
-                              setModBusy(false);
-                            }
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#142218] border border-[#22543D] text-[#4ADE80] rounded-md cursor-pointer disabled:opacity-50"
-                        >
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          <span>Tornar Admin</span>
-                        </button>
-                      )
-                    )}
+                    <div
+                      role="group"
+                      aria-label="Badge do usuário"
+                      className="inline-flex items-center rounded-md border border-[#2C312C] bg-[#0C0D0C] p-0.5 gap-0.5"
+                    >
+                      {(['cobra', 'guest'] as MemberBadge[]).map((badgeOption) => {
+                        const meta = MEMBER_BADGE_META[badgeOption];
+                        const currentBadge: MemberBadge =
+                          activeMember.memberBadge === 'guest' ? 'guest' : 'cobra';
+                        const isSelected = currentBadge === badgeOption;
+                        return (
+                          <button
+                            key={badgeOption}
+                            type="button"
+                            disabled={modBusy || isSelected}
+                            onClick={async () => {
+                              setModBusy(true);
+                              try {
+                                await updateMemberBadge(activeMember.uid, badgeOption);
+                              } finally {
+                                setModBusy(false);
+                              }
+                            }}
+                            className={`px-2.5 py-1 text-xs font-medium rounded transition-colors cursor-pointer disabled:cursor-default ${
+                              isSelected
+                                ? meta.activeButtonClass
+                                : 'text-[#8C9288] hover:text-[#F2F2EE]'
+                            }`}
+                          >
+                            {meta.label}
+                          </button>
+                        );
+                      })}
+                    </div>
 
-                    {bansByUid[activeMember.uid] ? (
-                      <button
-                        type="button"
-                        disabled={modBusy}
-                        onClick={async () => {
-                          setModBusy(true);
-                          try {
-                            await unbanUser(activeMember.uid);
-                          } finally {
-                            setModBusy(false);
-                          }
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#142218] border border-[#22543D] text-[#4ADE80] rounded-md cursor-pointer disabled:opacity-50"
-                      >
-                        <UserCheck className="w-3.5 h-3.5" />
-                        <span>Desbanir membro</span>
-                      </button>
-                    ) : (
-                      !adminUids.has(activeMember.uid) && (
-                        <button
-                          type="button"
-                          onClick={() => setShowBanInput((prev) => !prev)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#0C0D0C] border border-[#3F2222] text-[#F87171] hover:bg-[#291515] rounded-md cursor-pointer"
-                        >
-                          <Ban className="w-3.5 h-3.5" />
-                          <span>Banir membro</span>
-                        </button>
-                      )
+                    {user?.uid !== activeMember.uid && (
+                      <>
+                        {!bansByUid[activeMember.uid] && (
+                          adminUids.has(activeMember.uid) ? (
+                            <button
+                              type="button"
+                              disabled={modBusy}
+                              onClick={async () => {
+                                setModBusy(true);
+                                try {
+                                  await revokeAdmin(activeMember.uid);
+                                } finally {
+                                  setModBusy(false);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#0C0D0C] border border-[#2C312C] text-[#A8ACA5] hover:text-[#FBBF24] rounded-md cursor-pointer disabled:opacity-50"
+                            >
+                              <ShieldOff className="w-3.5 h-3.5" />
+                              <span>Remover Admin</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={modBusy}
+                              onClick={async () => {
+                                setModBusy(true);
+                                try {
+                                  await grantAdmin(activeMember.uid, activeMember.displayName);
+                                } finally {
+                                  setModBusy(false);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#142218] border border-[#22543D] text-[#4ADE80] rounded-md cursor-pointer disabled:opacity-50"
+                            >
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                              <span>Tornar Admin</span>
+                            </button>
+                          )
+                        )}
+
+                        {bansByUid[activeMember.uid] ? (
+                          <button
+                            type="button"
+                            disabled={modBusy}
+                            onClick={async () => {
+                              setModBusy(true);
+                              try {
+                                await unbanUser(activeMember.uid);
+                              } finally {
+                                setModBusy(false);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#142218] border border-[#22543D] text-[#4ADE80] rounded-md cursor-pointer disabled:opacity-50"
+                          >
+                            <UserCheck className="w-3.5 h-3.5" />
+                            <span>Desbanir membro</span>
+                          </button>
+                        ) : (
+                          !adminUids.has(activeMember.uid) && (
+                            <button
+                              type="button"
+                              onClick={() => setShowBanInput((prev) => !prev)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#0C0D0C] border border-[#3F2222] text-[#F87171] hover:bg-[#291515] rounded-md cursor-pointer"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                              <span>Banir membro</span>
+                            </button>
+                          )
+                        )}
+                      </>
                     )}
                   </div>
 
@@ -783,6 +828,11 @@ export function MembersView({
                           <p className="font-serif text-lg font-medium text-[#F2F2EE] truncate">
                             {member.displayName}
                           </p>
+                          <span
+                            className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0 ${getMemberBadgeMeta(member.memberBadge).pillClass}`}
+                          >
+                            {getMemberBadgeMeta(member.memberBadge).shortLabel}
+                          </span>
                           {adminUids.has(member.uid) && (
                             <span className="text-[10px] font-mono text-[#4ADE80] shrink-0">
                               ADMIN
@@ -797,7 +847,7 @@ export function MembersView({
                         <p className="text-xs text-[#8C9288] truncate">
                           {topFive.length > 0
                             ? `Top 1: ${topFive[0]}`
-                            : 'Membro dos Cobras'}
+                            : getMemberBadgeMeta(member.memberBadge).label}
                         </p>
                       </div>
                     </div>

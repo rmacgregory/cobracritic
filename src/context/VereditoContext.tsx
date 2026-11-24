@@ -59,6 +59,7 @@ import {
   type GameInput,
   type GamePlayStatus,
   type GameWithStats,
+  type MemberBadge,
   type NotificationPreferences,
   type Review,
   type ReviewComment,
@@ -281,6 +282,7 @@ interface VereditoContextValue {
   seedStarterGames: () => Promise<void>;
   grantAdmin: (targetUid: string, displayName: string) => Promise<void>;
   revokeAdmin: (targetUid: string) => Promise<void>;
+  updateMemberBadge: (targetUid: string, badge: MemberBadge) => Promise<void>;
   banUser: (targetUid: string, displayName: string, reason: string) => Promise<void>;
   unbanUser: (targetUid: string) => Promise<void>;
   purgeMemberContent: (targetUid: string) => Promise<{ reviewsDeleted: number; commentsDeleted: number }>;
@@ -2140,6 +2142,22 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateMemberBadge = async (targetUid: string, badge: MemberBadge) => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem alterar a badge de um membro.');
+    }
+    const safeBadge: MemberBadge = badge === 'guest' ? 'guest' : 'cobra';
+    const path = `users/${targetUid}`;
+    try {
+      await updateDoc(doc(db, 'users', targetUid), {
+        memberBadge: safeBadge,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
   const banUser = async (targetUid: string, displayName: string, reason: string) => {
     if (!user || !isAdmin) throw new Error('Apenas administradores podem banir membros.');
     if (targetUid === user.uid) {
@@ -2797,6 +2815,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         seedStarterGames,
         grantAdmin,
         revokeAdmin,
+        updateMemberBadge,
         banUser,
         unbanUser,
         purgeMemberContent,

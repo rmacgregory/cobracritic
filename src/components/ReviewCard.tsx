@@ -20,6 +20,7 @@ import {
   GAME_PLAY_STATUS_META,
   LIMITS,
   formatTimestamp,
+  getMemberBadgeMeta,
   getScoreMeta,
   type Game,
   type Review,
@@ -460,6 +461,11 @@ export function ReviewCard({
                   {resolvedAuthorName}
                 </p>
               )}
+              <span
+                className={`text-[10px] font-mono px-1.5 py-0.5 rounded border shrink-0 ${getMemberBadgeMeta(liveAuthor?.memberBadge).pillClass}`}
+              >
+                {getMemberBadgeMeta(liveAuthor?.memberBadge).label}
+              </span>
               {adminUids.has(review.authorId) && (
                 <span className="text-[10px] font-mono text-[#4ADE80] shrink-0">
                   ADMIN
@@ -738,6 +744,11 @@ export function ReviewCard({
                                 {commentAuthorName}
                               </span>
                             )}
+                            <span
+                              className={`text-[10px] font-mono px-1.5 py-0.2 rounded border shrink-0 ${getMemberBadgeMeta(liveCommenter?.memberBadge).pillClass}`}
+                            >
+                              {getMemberBadgeMeta(liveCommenter?.memberBadge).shortLabel}
+                            </span>
                             {showReplyTarget && (
                               <span className="inline-flex items-center gap-1 text-[11px] text-[#7F9A86]">
                                 <CornerDownRight className="w-3 h-3 shrink-0" />

@@ -167,6 +167,38 @@ export function resolveNotificationPreferences(
   };
 }
 
+export type MemberBadge = 'cobra' | 'guest';
+
+export const MEMBER_BADGE_META: Record<
+  MemberBadge,
+  {
+    label: string;
+    shortLabel: string;
+    textClass: string;
+    pillClass: string;
+    activeButtonClass: string;
+  }
+> = {
+  cobra: {
+    label: 'Membro dos Cobras',
+    shortLabel: 'Cobra',
+    textClass: 'text-[#4ADE80]',
+    pillClass: 'text-[#4ADE80] bg-[#16291D] border-[#22543D]',
+    activeButtonClass: 'bg-[#142218] border-[#22543D] text-[#4ADE80]',
+  },
+  guest: {
+    label: 'Convidado',
+    shortLabel: 'Convidado',
+    textClass: 'text-[#60A5FA]',
+    pillClass: 'text-[#93C5FD] bg-[#121D2D] border-[#2A4C7C]',
+    activeButtonClass: 'bg-[#121D2D] border-[#2A4C7C] text-[#93C5FD]',
+  },
+};
+
+export function getMemberBadgeMeta(badge?: MemberBadge | null) {
+  return MEMBER_BADGE_META[badge === 'guest' ? 'guest' : 'cobra'];
+}
+
 export interface UserProfile {
   uid: string;
   displayName: string;
@@ -175,6 +207,7 @@ export interface UserProfile {
   topFiveGames?: string[];
   favoriteGenre?: string;
   notificationPreferences?: NotificationPreferences;
+  memberBadge?: MemberBadge;
   visibility: 'group';
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;

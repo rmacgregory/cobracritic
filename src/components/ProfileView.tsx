@@ -22,6 +22,7 @@ import {
   GAME_PLAY_STATUS_META,
   GAME_PROGRESS_STATUS_LIST,
   LIMITS,
+  getMemberBadgeMeta,
   type GamePlayStatus,
   type GameWithStats,
   type NotificationPreferences,
@@ -437,8 +438,10 @@ export function ProfileView({
           </div>
 
           <div className="min-w-0">
-            <p className="text-xs font-medium text-[#4ADE80]">
-              Perfil do Cobra
+            <p
+              className={`text-xs font-mono ${getMemberBadgeMeta(profile?.memberBadge).textClass}`}
+            >
+              {getMemberBadgeMeta(profile?.memberBadge).label}
             </p>
             <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#F2F2EE] mt-0.5 truncate">
               {shownName}
