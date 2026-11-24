@@ -6,6 +6,7 @@ import {
   ChevronsRight,
   Search,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useVeredito } from '../context/VereditoContext';
 import { formatTimestamp, type GameWithStats, type Review } from '../types';
 import { FeaturedRoundBanner } from './FeaturedRoundBanner';
@@ -169,6 +170,7 @@ export function SocialFeedView({
   const [sentiment, setSentiment] = useState<SentimentFilter>('all');
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageDirection, setPageDirection] = useState<1 | -1>(1);
   const feedStreamTopRef = useRef<HTMLDivElement | null>(null);
 
   const gamesById = useMemo(() => {
@@ -231,6 +233,7 @@ export function SocialFeedView({
   const handlePageChange = (nextPage: number) => {
     const clamped = Math.min(Math.max(1, nextPage), totalPages);
     if (clamped === safePage) return;
+    setPageDirection(clamped > safePage ? 1 : -1);
     setCurrentPage(clamped);
     if (feedStreamTopRef.current) {
       feedStreamTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -356,25 +359,44 @@ export function SocialFeedView({
                 onPageChange={handlePageChange}
               />
 
-              <div className="space-y-6">
-                {paginatedReviews.map((review) => {
-                  const game = gamesById.get(review.gameId) || null;
-                  return (
-                    <ReviewCard
-                      key={review.id}
-                      review={review}
-                      game={game}
-                      showGameHeader
-                      defaultCommentsOpen
-                      onSelectGame={onSelectGame}
-                      onSelectAuthor={onSelectAuthor}
-                      onEditReview={
-                        game ? (rev) => onEditReview(game, rev) : undefined
-                      }
-                    />
-                  );
-                })}
-              </div>
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div
+                  key={`feed-page-${safePage}-${selectedAuthor}-${sentiment}-${search.trim()}`}
+                  initial={{ opacity: 0, y: pageDirection >= 0 ? 14 : -14 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: pageDirection >= 0 ? -10 : 10 }}
+                  transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                  className="space-y-6"
+                >
+                  {paginatedReviews.map((review, idx) => {
+                    const game = gamesById.get(review.gameId) || null;
+                    return (
+                      <motion.div
+                        key={review.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                          duration: 0.22,
+                          delay: Math.min(idx * 0.03, 0.24),
+                          ease: [0.22, 1, 0.36, 1],
+                        }}
+                      >
+                        <ReviewCard
+                          review={review}
+                          game={game}
+                          showGameHeader
+                          defaultCommentsOpen
+                          onSelectGame={onSelectGame}
+                          onSelectAuthor={onSelectAuthor}
+                          onEditReview={
+                            game ? (rev) => onEditReview(game, rev) : undefined
+                          }
+                        />
+                      </motion.div>
+                    );
+                  })}
+                </motion.div>
+              </AnimatePresence>
 
               <FeedPagination
                 currentPage={safePage}
