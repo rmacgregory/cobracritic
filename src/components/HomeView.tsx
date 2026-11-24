@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   ChevronLeft,
@@ -11,7 +11,6 @@ import {
   Pause,
   Play,
   Plus,
-  Shuffle,
   ThumbsUp,
   Trophy,
   Vote,
@@ -45,6 +44,7 @@ interface HomeViewProps {
 const TRENDING_WINDOW_MS = 48 * 60 * 60 * 1000;
 const POSITIVE_SCORE_THRESHOLD = 75;
 const ROTATION_INTERVAL_MS = 7500;
+const MAX_BANNER_SLIDES = 8;
 
 interface TrendingGameEntry {
   game: GameWithStats;
@@ -146,9 +146,6 @@ export function HomeView({
   const [isHovered, setIsHovered] = useState(false);
   const [backdropBroken, setBackdropBroken] = useState(false);
 
-  // Shuffled queue for non-repeating random auto-rotation
-  const randomQueueRef = useRef<number[]>([]);
-
   useEffect(() => {
     const interval = window.setInterval(() => {
       setNowMs(Date.now());
@@ -222,7 +219,8 @@ export function HomeView({
       });
     }
 
-    for (const rev of reviews.slice(0, 5)) {
+    const remainingSlots = Math.max(0, MAX_BANNER_SLIDES - list.length);
+    for (const rev of reviews.slice(0, remainingSlots)) {
       const game = gamesById.get(rev.gameId) || null;
       const liveAuthor = membersById[rev.authorId];
       const statusEntry = (userStatusesByGame[rev.gameId] || []).find(
@@ -244,7 +242,7 @@ export function HomeView({
       });
     }
 
-    return list;
+    return list.slice(0, MAX_BANNER_SLIDES);
   }, [
     topRatedGame,
     ongoingEvents,
@@ -259,7 +257,6 @@ export function HomeView({
     if (activeSlideIndex >= slides.length) {
       setActiveSlideIndex(0);
     }
-    randomQueueRef.current = [];
   }, [slides.length, activeSlideIndex]);
 
   const currentSlide = slides[activeSlideIndex] || slides[0] || null;
@@ -268,40 +265,13 @@ export function HomeView({
     setBackdropBroken(false);
   }, [currentSlide?.id]);
 
-  const pickNextRandomIndex = useCallback(
-    (currentIdx: number, total: number): number => {
-      if (total <= 1) return 0;
-      let queue = randomQueueRef.current.filter(
-        (idx) => idx >= 0 && idx < total && idx !== currentIdx,
-      );
-      if (queue.length === 0) {
-        const indices: number[] = [];
-        for (let i = 0; i < total; i += 1) {
-          if (i !== currentIdx) indices.push(i);
-        }
-        // Fisher-Yates shuffle
-        for (let i = indices.length - 1; i > 0; i -= 1) {
-          const j = Math.floor(Math.random() * (i + 1));
-          const tmp = indices[i];
-          indices[i] = indices[j];
-          indices[j] = tmp;
-        }
-        queue = indices;
-      }
-      const next = queue.shift() ?? 0;
-      randomQueueRef.current = queue;
-      return next;
-    },
-    [],
-  );
-
   useEffect(() => {
     if (slides.length <= 1 || isPaused || isHovered) return;
     const timer = window.setInterval(() => {
-      setActiveSlideIndex((prev) => pickNextRandomIndex(prev, slides.length));
+      setActiveSlideIndex((prev) => (prev + 1) % slides.length);
     }, ROTATION_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [slides.length, isPaused, isHovered, pickNextRandomIndex]);
+  }, [slides.length, isPaused, isHovered]);
 
   const handlePrevSlide = () => {
     if (slides.length <= 1) return;
@@ -311,11 +281,6 @@ export function HomeView({
   const handleNextSlide = () => {
     if (slides.length <= 1) return;
     setActiveSlideIndex((prev) => (prev + 1) % slides.length);
-  };
-
-  const handleShuffleSlide = () => {
-    if (slides.length <= 1) return;
-    setActiveSlideIndex((prev) => pickNextRandomIndex(prev, slides.length));
   };
 
   const trendingGames = useMemo<TrendingGameEntry[]>(() => {
@@ -997,15 +962,6 @@ export function HomeView({
                       className="p-1.5 rounded border border-[#262B26] bg-[#0C0D0C] text-[#A8ACA5] hover:text-[#F2F2EE] hover:border-[#4ADE80]/50 transition-colors cursor-pointer"
                     >
                       <ChevronRight className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleShuffleSlide}
-                      title="Sortear outro destaque"
-                      aria-label="Sortear outro destaque"
-                      className="p-1.5 rounded border border-[#262B26] bg-[#0C0D0C] text-[#A8ACA5] hover:text-[#4ADE80] hover:border-[#4ADE80]/50 transition-colors cursor-pointer"
-                    >
-                      <Shuffle className="w-3.5 h-3.5" />
                     </button>
                     <button
                       type="button"

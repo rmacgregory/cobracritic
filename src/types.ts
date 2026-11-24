@@ -13,6 +13,7 @@ export const LIMITS = {
   TOP_FIVE_MAX: 5,
   TOP_FIVE_TITLE_MAX: 120,
   BAN_REASON_MAX: 300,
+  ACCESS_REJECTION_REASON_MAX: 300,
   GAME_TITLE_MAX: 120,
   DEVELOPER_MAX: 100,
   SYNOPSIS_MAX: 1200,
@@ -404,12 +405,18 @@ export interface FeaturedRoundGame {
   updatedAt?: Timestamp | null;
 }
 
-export interface AccessControlConfig {
-  id: string;
-  registrationLocked: boolean;
-  updatedBy: string;
-  updatedByName: string;
+export type AccessRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface AccessRequest {
+  uid: string;
+  displayName: string;
+  photoURL: string;
+  status: AccessRequestStatus;
+  rejectionReason: string;
+  reviewedBy: string;
+  reviewedByName: string;
   visibility: 'group';
+  createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;
 }
 

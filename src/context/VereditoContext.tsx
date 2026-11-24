@@ -44,7 +44,7 @@ import {
   resolveNotificationPreferences,
   sanitizeAvatarUrl,
   sanitizeOptionalUrl,
-  type AccessControlConfig,
+  type AccessRequest,
   type AdminGrant,
   type CobraEvent,
   type CoverReport,
@@ -123,6 +123,17 @@ export interface GroupActivityNotification {
   createdAt?: CobraEvent['updatedAt'];
   unread: boolean;
 }
+
+export interface AccessRequestNotification {
+  id: string;
+  uid: string;
+  displayName: string;
+  photoURL: string;
+  createdAt?: AccessRequest['createdAt'];
+  unread: boolean;
+}
+
+export type AccessGateStatus = 'loading' | 'approved' | 'pending' | 'rejected';
 
 function buildFeaturedRoundNotifId(round: FeaturedRoundGame): string {
   const slug = `${round.gameId || 'custom'}_${round.title}_${round.roundLabel}`
@@ -206,12 +217,16 @@ interface VereditoContextValue {
   userStatusesByGame: Record<string, UserGameStatus[]>;
   myStatusByGame: Record<string, GamePlayStatus>;
   featuredRound: FeaturedRoundGame | null;
-  accessControl: AccessControlConfig | null;
-  registrationLocked: boolean;
+  accessStatus: AccessGateStatus;
+  myAccessRequest: AccessRequest | null;
+  accessRequests: AccessRequest[];
+  pendingAccessRequests: AccessRequest[];
   readOnlyMode: boolean;
   enterReadOnlyMode: () => void;
   exitReadOnlyMode: () => void;
-  setRegistrationLocked: (locked: boolean) => Promise<void>;
+  approveAccessRequest: (req: AccessRequest) => Promise<void>;
+  rejectAccessRequest: (targetUid: string, reason?: string) => Promise<void>;
+  deleteAccessRequest: (targetUid: string) => Promise<void>;
   coverReports: CoverReport[];
   openCoverReports: CoverReport[];
   myOpenCoverReportGameIds: Set<string>;
@@ -219,16 +234,19 @@ interface VereditoContextValue {
   reactionsByReview: Record<string, ReviewReaction[]>;
   commentNotifications: CommentNotification[];
   coverReportNotifications: CoverReportNotification[];
+  accessRequestNotifications: AccessRequestNotification[];
   groupNotifications: GroupActivityNotification[];
   notificationPreferences: NotificationPreferences;
   unreadNotificationCount: number;
   latestLiveNotification: CommentNotification | null;
   latestLiveCoverReport: CoverReportNotification | null;
+  latestLiveAccessRequest: AccessRequestNotification | null;
   latestLiveGroupNotification: GroupActivityNotification | null;
   markNotificationRead: (notifId: string) => void;
   markAllNotificationsRead: () => void;
   dismissLiveNotification: () => void;
   dismissLiveCoverReport: () => void;
+  dismissLiveAccessRequest: () => void;
   dismissLiveGroupNotification: () => void;
   signInWithGoogle: () => Promise<void>;
   signInWithAdminCredentials: (usernameOrEmail: string, password: string) => Promise<void>;
@@ -336,7 +354,9 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   const [eventNominations, setEventNominations] = useState<EventNomination[]>([]);
   const [userGameStatuses, setUserGameStatuses] = useState<UserGameStatus[]>([]);
   const [featuredRound, setFeaturedRound] = useState<FeaturedRoundGame | null>(null);
-  const [accessControl, setAccessControl] = useState<AccessControlConfig | null>(null);
+  const [accessStatus, setAccessStatus] = useState<AccessGateStatus>('approved');
+  const [myAccessRequest, setMyAccessRequest] = useState<AccessRequest | null>(null);
+  const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
   const [readOnlyMode, setReadOnlyMode] = useState(false);
   const [coverReports, setCoverReports] = useState<CoverReport[]>([]);
   const [notifReadState, setNotifReadState] = useState<NotificationReadState>({
@@ -345,12 +365,15 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   });
   const [liveNotifId, setLiveNotifId] = useState<string | null>(null);
   const [liveCoverReportId, setLiveCoverReportId] = useState<string | null>(null);
+  const [liveAccessRequestUid, setLiveAccessRequestUid] = useState<string | null>(null);
   const [liveGroupNotifId, setLiveGroupNotifId] = useState<string | null>(null);
   const [viewAsMember, setViewAsMember] = useState(false);
   const seenCommentIdsRef = useRef<Set<string>>(new Set());
   const commentsInitializedRef = useRef(false);
   const seenCoverReportIdsRef = useRef<Set<string>>(new Set());
   const coverReportsInitializedRef = useRef(false);
+  const seenAccessRequestUidsRef = useRef<Set<string>>(new Set());
+  const accessRequestsInitializedRef = useRef(false);
   const eventsInitializedRef = useRef(false);
   const seenEventStatusByIdRef = useRef<Map<string, EventStatus>>(new Map());
   const featuredRoundInitializedRef = useRef(false);
@@ -361,33 +384,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     DEFAULT_NOTIFICATION_PREFERENCES,
   );
 
-  // Real-time listener for public access control setting (active even before sign-in)
-  useEffect(() => {
-    const unsubAccessControl = onSnapshot(
-      doc(db, 'groupConfig', 'accessControl'),
-      (snap) => {
-        if (!snap.exists()) {
-          setAccessControl(null);
-          return;
-        }
-        setAccessControl({
-          id: snap.id,
-          ...(snap.data() as Omit<AccessControlConfig, 'id'>),
-        });
-      },
-      (err) => {
-        console.warn('Could not read accessControl config:', err);
-      },
-    );
-
-    return () => unsubAccessControl();
-  }, []);
-
-  const registrationLocked = Boolean(accessControl?.registrationLocked);
-
   const enterReadOnlyMode = useCallback(() => {
     setAuthError(null);
     setAdminAuthError(null);
+    if (auth.currentUser) {
+      void signOut(auth);
+    }
     setReadOnlyMode(true);
   }, []);
 
@@ -403,48 +405,28 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
 
       if (nextUser) {
         setReadOnlyMode(false);
+        setAccessStatus('loading');
+        setMyAccessRequest(null);
+
         const userRef = doc(db, 'users', nextUser.uid);
         try {
-          const snap = await getDoc(userRef);
-          if (!snap.exists()) {
-            const safeName = (
-              nextUser.displayName ||
-              nextUser.email?.split('@')[0] ||
-              'Cobra'
-            )
-              .trim()
-              .slice(0, LIMITS.DISPLAY_NAME_MAX);
-            try {
-              await setDoc(userRef, {
-                uid: nextUser.uid,
-                displayName: safeName || 'Cobra',
-                photoURL: sanitizeAvatarUrl(nextUser.photoURL),
-                bio: '',
-                topFiveGames: [],
-                visibility: 'group',
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-              });
-            } catch (writeErr) {
-              const code = (writeErr as { code?: string })?.code || '';
-              if (code === 'permission-denied' && !nextUser.emailVerified) {
-                // Account logged in with Email/Password before being added to /admins
-                setProfileSetupPending(true);
-                return;
-              }
-              if (code === 'permission-denied') {
-                await signOut(auth);
-                setAuthError(
-                  'Novos cadastros estão bloqueados pela administração. Use o modo somente leitura para visualizar o site.',
-                );
-                return;
-              }
-              throw writeErr;
-            }
-          } else {
-            const existingData = snap.data() as Partial<UserProfile> | undefined;
+          const [userSnap, adminSnap, banSnap] = await Promise.all([
+            getDoc(userRef),
+            getDoc(doc(db, 'admins', nextUser.uid)).catch(() => null),
+            getDoc(doc(db, 'bans', nextUser.uid)).catch(() => null),
+          ]);
+
+          const isMaster =
+            nextUser.email === MASTER_ADMIN_EMAIL && nextUser.emailVerified;
+          const isDelegatedAdmin = Boolean(adminSnap?.exists());
+          const isUserBanned = Boolean(banSnap?.exists()) && !isMaster;
+
+          if (userSnap.exists()) {
+            // Existing registered member logs in normally
+            setAccessStatus('approved');
+            const existingData = userSnap.data() as Partial<UserProfile> | undefined;
             const authPhoto = sanitizeAvatarUrl(nextUser.photoURL);
-            if (!existingData?.photoURL && authPhoto) {
+            if (!existingData?.photoURL && authPhoto && !isUserBanned) {
               try {
                 await updateDoc(userRef, {
                   photoURL: authPhoto,
@@ -454,25 +436,114 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
                   updatedAt: serverTimestamp(),
                 });
               } catch {
-                // ignore backfill errors for non-verified accounts
+                // ignore backfill errors
               }
             }
+            return;
           }
+
+          if (isUserBanned) {
+            setAccessStatus('approved');
+            return;
+          }
+
+          const safeName =
+            (
+              nextUser.displayName ||
+              nextUser.email?.split('@')[0] ||
+              'Cobra'
+            )
+              .trim()
+              .slice(0, LIMITS.DISPLAY_NAME_MAX) || 'Cobra';
+
+          if (isMaster || isDelegatedAdmin) {
+            await setDoc(userRef, {
+              uid: nextUser.uid,
+              displayName: safeName,
+              photoURL: sanitizeAvatarUrl(nextUser.photoURL),
+              bio: '',
+              topFiveGames: [],
+              visibility: 'group',
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+            setAccessStatus('approved');
+            return;
+          }
+
+          if (!nextUser.emailVerified) {
+            // Email/Password admin account not yet linked in /admins
+            setProfileSetupPending(true);
+            setAccessStatus('approved');
+            return;
+          }
+
+          // New Google user without an existing profile: check or create access request
+          const reqRef = doc(db, 'accessRequests', nextUser.uid);
+          const reqSnap = await getDoc(reqRef);
+
+          if (reqSnap.exists()) {
+            const reqData = reqSnap.data() as AccessRequest;
+            if (reqData.status === 'approved') {
+              await setDoc(userRef, {
+                uid: nextUser.uid,
+                displayName: safeName,
+                photoURL: sanitizeAvatarUrl(nextUser.photoURL),
+                bio: '',
+                topFiveGames: [],
+                visibility: 'group',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+              setMyAccessRequest(reqData);
+              setAccessStatus('approved');
+              return;
+            }
+            setMyAccessRequest(reqData);
+            setAccessStatus(reqData.status === 'rejected' ? 'rejected' : 'pending');
+            return;
+          }
+
+          const newRequest = {
+            uid: nextUser.uid,
+            displayName: safeName,
+            photoURL: sanitizeOptionalUrl(nextUser.photoURL),
+            status: 'pending' as const,
+            rejectionReason: '',
+            reviewedBy: '',
+            reviewedByName: '',
+            visibility: 'group' as const,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          };
+          await setDoc(reqRef, newRequest);
+          setMyAccessRequest({
+            ...newRequest,
+            createdAt: null,
+            updatedAt: null,
+          });
+          setAccessStatus('pending');
         } catch (error) {
-          handleFirestoreError(error, OperationType.WRITE, `users/${nextUser.uid}`);
+          handleFirestoreError(error, OperationType.WRITE, `accessRequests/${nextUser.uid}`);
         }
       } else {
+        setAccessStatus('approved');
+        setMyAccessRequest(null);
+        setAccessRequests([]);
         setAdmins([]);
         setBans([]);
         setCoverReports([]);
         setLiveNotifId(null);
         setLiveCoverReportId(null);
+        setLiveAccessRequestUid(null);
         setLiveGroupNotifId(null);
         setViewAsMember(false);
         seenCommentIdsRef.current = new Set();
         commentsInitializedRef.current = false;
         seenCoverReportIdsRef.current = new Set();
         coverReportsInitializedRef.current = false;
+        seenAccessRequestUidsRef.current = new Set();
+        accessRequestsInitializedRef.current = false;
         eventsInitializedRef.current = false;
         seenEventStatusByIdRef.current = new Map();
         featuredRoundInitializedRef.current = false;
@@ -486,10 +557,82 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  // Real-time listener while a new user waits for admin approval or rejection
   useEffect(() => {
-    if (!authReady || (!user && !readOnlyMode)) {
+    if (!authReady || !user || (accessStatus !== 'pending' && accessStatus !== 'rejected')) {
+      return;
+    }
+
+    const unsubOwnProfile = onSnapshot(
+      doc(db, 'users', user.uid),
+      (snap) => {
+        if (snap.exists()) {
+          setAccessStatus('approved');
+        }
+      },
+      () => {
+        // ignore transient read errors while pending
+      },
+    );
+
+    const unsubOwnRequest = onSnapshot(
+      doc(db, 'accessRequests', user.uid),
+      async (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data() as AccessRequest;
+        setMyAccessRequest(data);
+        if (data.status === 'approved') {
+          const userRef = doc(db, 'users', user.uid);
+          try {
+            const existingProfile = await getDoc(userRef);
+            if (!existingProfile.exists()) {
+              const safeName =
+                (
+                  user.displayName ||
+                  data.displayName ||
+                  user.email?.split('@')[0] ||
+                  'Cobra'
+                )
+                  .trim()
+                  .slice(0, LIMITS.DISPLAY_NAME_MAX) || 'Cobra';
+              await setDoc(userRef, {
+                uid: user.uid,
+                displayName: safeName,
+                photoURL: sanitizeAvatarUrl(user.photoURL || data.photoURL),
+                bio: '',
+                topFiveGames: [],
+                visibility: 'group',
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+              });
+            }
+            setAccessStatus('approved');
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, `users/${user.uid}`);
+          }
+        } else if (data.status === 'rejected') {
+          setAccessStatus('rejected');
+        } else {
+          setAccessStatus('pending');
+        }
+      },
+      () => {
+        // ignore transient listener errors
+      },
+    );
+
+    return () => {
+      unsubOwnProfile();
+      unsubOwnRequest();
+    };
+  }, [authReady, user, accessStatus]);
+
+  const hasApprovedSession = Boolean(user && accessStatus === 'approved');
+
+  useEffect(() => {
+    if (!authReady || (!hasApprovedSession && !readOnlyMode)) {
       setDataLoading(false);
-      if (!user && !readOnlyMode) {
+      if (!hasApprovedSession && !readOnlyMode) {
         setMembers([]);
         setGames([]);
         setReviews([]);
@@ -529,7 +672,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       (err) => handleFirestoreError(err, OperationType.LIST, 'users'),
     );
 
-    const unsubAdmins = user
+    const unsubAdmins = hasApprovedSession
       ? onSnapshot(
           query(collection(db, 'admins'), where('visibility', '==', 'group')),
           (snap) => {
@@ -541,7 +684,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         )
       : () => {};
 
-    const unsubBans = user
+    const unsubBans = hasApprovedSession
       ? onSnapshot(
           query(collection(db, 'bans'), where('visibility', '==', 'group')),
           (snap) => {
@@ -775,7 +918,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       unsubUserGameStatuses();
       unsubFeaturedRound();
     };
-  }, [authReady, user, readOnlyMode]);
+  }, [authReady, user, hasApprovedSession, readOnlyMode]);
 
   const profile = useMemo(() => {
     if (!user) return null;
@@ -851,7 +994,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   // - Real admins stay subscribed to group cover reports (avoiding listener churn when toggling preview mode).
   // - Cover report notifications & UI are only exposed when effective `isAdmin` is true.
   useEffect(() => {
-    if (!authReady || !user) {
+    if (!authReady || !user || accessStatus !== 'approved') {
       setCoverReports([]);
       return;
     }
@@ -912,7 +1055,64 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     );
 
     return () => unsubReports();
-  }, [authReady, user, isRealAdmin]);
+  }, [authReady, user, accessStatus, isRealAdmin]);
+
+  // Dedicated real-time listener for admin access requests queue
+  useEffect(() => {
+    if (!authReady || !user || accessStatus !== 'approved' || !isRealAdmin) {
+      setAccessRequests([]);
+      return;
+    }
+
+    accessRequestsInitializedRef.current = false;
+    seenAccessRequestUidsRef.current = new Set();
+
+    const unsubAccessRequests = onSnapshot(
+      query(collection(db, 'accessRequests'), where('visibility', '==', 'group')),
+      (snap) => {
+        const list = snap.docs.map((d) => {
+          const data = d.data() as AccessRequest;
+          return { ...data, uid: data.uid || d.id };
+        });
+        list.sort((a, b) => {
+          if (a.status === 'pending' && b.status !== 'pending') return -1;
+          if (a.status !== 'pending' && b.status === 'pending') return 1;
+          return getTimeMillis(b.updatedAt || b.createdAt) - getTimeMillis(a.updatedAt || a.createdAt);
+        });
+
+        if (!accessRequestsInitializedRef.current) {
+          seenAccessRequestUidsRef.current = new Set(
+            list.filter((r) => r.status === 'pending').map((r) => r.uid),
+          );
+          accessRequestsInitializedRef.current = true;
+        } else {
+          for (const change of snap.docChanges()) {
+            const data = change.doc.data() as AccessRequest;
+            const reqUid = data.uid || change.doc.id;
+            if (
+              (change.type === 'added' || change.type === 'modified') &&
+              data.status === 'pending' &&
+              !seenAccessRequestUidsRef.current.has(reqUid)
+            ) {
+              seenAccessRequestUidsRef.current.add(reqUid);
+              const prefs = notificationPreferencesRef.current;
+              if (prefs.liveToasts) {
+                setLiveAccessRequestUid(reqUid);
+              }
+            }
+            if (change.type === 'modified' && data.status !== 'pending') {
+              seenAccessRequestUidsRef.current.delete(reqUid);
+            }
+          }
+        }
+
+        setAccessRequests(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'accessRequests'),
+    );
+
+    return () => unsubAccessRequests();
+  }, [authReady, user, accessStatus, isRealAdmin]);
 
   const gamesWithStats = useMemo<GameWithStats[]>(() => {
     const reviewsByGame = new Map<string, Review[]>();
@@ -1142,6 +1342,11 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     [isAdmin, coverReports],
   );
 
+  const pendingAccessRequests = useMemo(
+    () => (isAdmin ? accessRequests.filter((r) => r.status === 'pending') : []),
+    [isAdmin, accessRequests],
+  );
+
   const myOpenCoverReportGameIds = useMemo(() => {
     const set = new Set<string>();
     if (!user) return set;
@@ -1270,12 +1475,37 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     notificationPreferences.events,
   ]);
 
+  const accessRequestNotifications = useMemo<AccessRequestNotification[]>(() => {
+    if (!user || !isAdmin) return [];
+    const readIdSet = new Set(notifReadState.readIds);
+    return pendingAccessRequests.map((req) => {
+      const notifId = `access_${req.uid}`;
+      const updatedMs = getTimeMillis(req.updatedAt || req.createdAt);
+      const unread =
+        !readIdSet.has(notifId) && updatedMs > notifReadState.readAllBeforeMs;
+      return {
+        id: notifId,
+        uid: req.uid,
+        displayName: req.displayName,
+        photoURL: req.photoURL || '',
+        createdAt: req.createdAt || req.updatedAt,
+        unread,
+      };
+    });
+  }, [user, isAdmin, pendingAccessRequests, notifReadState]);
+
   const unreadNotificationCount = useMemo(
     () =>
       commentNotifications.filter((n) => n.unread).length +
       coverReportNotifications.filter((n) => n.unread).length +
+      accessRequestNotifications.filter((n) => n.unread).length +
       groupNotifications.filter((n) => n.unread).length,
-    [commentNotifications, coverReportNotifications, groupNotifications],
+    [
+      commentNotifications,
+      coverReportNotifications,
+      accessRequestNotifications,
+      groupNotifications,
+    ],
   );
 
   const latestLiveNotification = useMemo(() => {
@@ -1303,6 +1533,20 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     notificationPreferences.liveToasts,
   ]);
 
+  const latestLiveAccessRequest = useMemo(() => {
+    if (!liveAccessRequestUid || !isAdmin || !notificationPreferences.liveToasts) {
+      return null;
+    }
+    return (
+      accessRequestNotifications.find((n) => n.uid === liveAccessRequestUid) || null
+    );
+  }, [
+    accessRequestNotifications,
+    liveAccessRequestUid,
+    isAdmin,
+    notificationPreferences.liveToasts,
+  ]);
+
   const latestLiveGroupNotification = useMemo(() => {
     if (!liveGroupNotifId || !notificationPreferences.liveToasts) return null;
     return groupNotifications.find((n) => n.id === liveGroupNotifId) || null;
@@ -1319,6 +1563,12 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const timer = window.setTimeout(() => setLiveCoverReportId(null), 8000);
     return () => window.clearTimeout(timer);
   }, [liveCoverReportId]);
+
+  useEffect(() => {
+    if (!liveAccessRequestUid) return;
+    const timer = window.setTimeout(() => setLiveAccessRequestUid(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [liveAccessRequestUid]);
 
   useEffect(() => {
     if (!liveGroupNotifId) return;
@@ -1347,6 +1597,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const allIds = [
       ...commentNotifications.map((n) => n.id),
       ...coverReportNotifications.map((n) => n.id),
+      ...accessRequestNotifications.map((n) => n.id),
       ...groupNotifications.map((n) => n.id),
     ];
     setNotifReadState((prev) => {
@@ -1360,8 +1611,15 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     });
     setLiveNotifId(null);
     setLiveCoverReportId(null);
+    setLiveAccessRequestUid(null);
     setLiveGroupNotifId(null);
-  }, [user, commentNotifications, coverReportNotifications, groupNotifications]);
+  }, [
+    user,
+    commentNotifications,
+    coverReportNotifications,
+    accessRequestNotifications,
+    groupNotifications,
+  ]);
 
   const dismissLiveNotification = useCallback(() => {
     setLiveNotifId(null);
@@ -1371,17 +1629,15 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     setLiveCoverReportId(null);
   }, []);
 
+  const dismissLiveAccessRequest = useCallback(() => {
+    setLiveAccessRequestUid(null);
+  }, []);
+
   const dismissLiveGroupNotification = useCallback(() => {
     setLiveGroupNotifId(null);
   }, []);
 
   const signInWithGoogle = async () => {
-    if (registrationLocked) {
-      setAuthError(
-        'Novos cadastros estão bloqueados no momento. Clique em "Visualizar site (somente leitura)" para navegar.',
-      );
-      return;
-    }
     setAuthError(null);
     setAdminAuthError(null);
     setSigningIn(true);
@@ -2390,33 +2646,69 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const setRegistrationLocked = async (locked: boolean) => {
+  const approveAccessRequest = async (req: AccessRequest) => {
     if (!user || !isAdmin) {
-      throw new Error('Apenas administradores podem alterar o bloqueio de cadastros.');
+      throw new Error('Apenas administradores podem aprovar solicitações de acesso.');
     }
-    const configRef = doc(db, 'groupConfig', 'accessControl');
-    const path = 'groupConfig/accessControl';
-    const updatedByName = getCurrentDisplayName();
+    const reviewedByName = getCurrentDisplayName();
+    const userRef = doc(db, 'users', req.uid);
+    const reqRef = doc(db, 'accessRequests', req.uid);
     try {
-      const snap = await getDoc(configRef);
-      if (snap.exists()) {
-        await updateDoc(configRef, {
-          registrationLocked: locked,
-          updatedBy: user.uid,
-          updatedByName,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        await setDoc(configRef, {
-          registrationLocked: locked,
-          updatedBy: user.uid,
-          updatedByName,
+      const existingProfile = await getDoc(userRef);
+      if (!existingProfile.exists()) {
+        await setDoc(userRef, {
+          uid: req.uid,
+          displayName:
+            req.displayName.trim().slice(0, LIMITS.DISPLAY_NAME_MAX) || 'Cobra',
+          photoURL: sanitizeAvatarUrl(req.photoURL),
+          bio: '',
+          topFiveGames: [],
           visibility: 'group' as const,
+          createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
       }
+      await updateDoc(reqRef, {
+        status: 'approved',
+        rejectionReason: '',
+        reviewedBy: user.uid,
+        reviewedByName,
+        updatedAt: serverTimestamp(),
+      });
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, path);
+      handleFirestoreError(error, OperationType.WRITE, `accessRequests/${req.uid}`);
+    }
+  };
+
+  const rejectAccessRequest = async (targetUid: string, reason = '') => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem recusar solicitações de acesso.');
+    }
+    const reviewedByName = getCurrentDisplayName();
+    const cleanReason = reason.trim().slice(0, LIMITS.ACCESS_REJECTION_REASON_MAX);
+    const path = `accessRequests/${targetUid}`;
+    try {
+      await updateDoc(doc(db, 'accessRequests', targetUid), {
+        status: 'rejected',
+        rejectionReason: cleanReason,
+        reviewedBy: user.uid,
+        reviewedByName,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const deleteAccessRequest = async (targetUid: string) => {
+    if (!user || !isAdmin) {
+      throw new Error('Apenas administradores podem remover registros de solicitação.');
+    }
+    const path = `accessRequests/${targetUid}`;
+    try {
+      await deleteDoc(doc(db, 'accessRequests', targetUid));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
@@ -2458,12 +2750,16 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         userStatusesByGame,
         myStatusByGame,
         featuredRound,
-        accessControl,
-        registrationLocked,
+        accessStatus,
+        myAccessRequest,
+        accessRequests,
+        pendingAccessRequests,
         readOnlyMode,
         enterReadOnlyMode,
         exitReadOnlyMode,
-        setRegistrationLocked,
+        approveAccessRequest,
+        rejectAccessRequest,
+        deleteAccessRequest,
         coverReports,
         openCoverReports,
         myOpenCoverReportGameIds,
@@ -2471,16 +2767,19 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         reactionsByReview,
         commentNotifications,
         coverReportNotifications,
+        accessRequestNotifications,
         groupNotifications,
         notificationPreferences,
         unreadNotificationCount,
         latestLiveNotification,
         latestLiveCoverReport,
+        latestLiveAccessRequest,
         latestLiveGroupNotification,
         markNotificationRead,
         markAllNotificationsRead,
         dismissLiveNotification,
         dismissLiveCoverReport,
+        dismissLiveAccessRequest,
         dismissLiveGroupNotification,
         signInWithGoogle,
         signInWithAdminCredentials,

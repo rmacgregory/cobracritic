@@ -2,11 +2,10 @@ import React, { useMemo, useState } from 'react';
 import {
   Ban,
   Check,
+  Clock,
   Eraser,
   ExternalLink,
   Flag,
-  Lock,
-  LockOpen,
   Pencil,
   Search,
   Shield,
@@ -15,6 +14,7 @@ import {
   Trash2,
   UserCheck,
   UserPlus,
+  UserX,
 } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import {
@@ -55,9 +55,11 @@ export function AdminPanelView({
     reviews,
     comments,
     openCoverReports,
-    accessControl,
-    registrationLocked,
-    setRegistrationLocked,
+    accessRequests,
+    pendingAccessRequests,
+    approveAccessRequest,
+    rejectAccessRequest,
+    deleteAccessRequest,
     grantAdmin,
     revokeAdmin,
     banUser,
@@ -73,6 +75,9 @@ export function AdminPanelView({
   const [section, setSection] = useState<AdminSection>('members');
   const [memberSearch, setMemberSearch] = useState('');
   const [memberFilter, setMemberFilter] = useState<MemberFilter>('all');
+  const [rejectingUid, setRejectingUid] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [showRequestHistory, setShowRequestHistory] = useState(false);
 
   const [gameSearch, setGameSearch] = useState('');
   const [postSearch, setPostSearch] = useState('');
@@ -88,6 +93,11 @@ export function AdminPanelView({
   // Manual UID admin grant (useful for granting Email/Password admin accounts)
   const [manualUid, setManualUid] = useState('');
   const [manualLabel, setManualLabel] = useState('');
+
+  const reviewedAccessRequests = useMemo(
+    () => accessRequests.filter((r) => r.status !== 'pending'),
+    [accessRequests],
+  );
 
   const gamesById = useMemo(() => {
     const map = new Map<string, GameWithStats>();
@@ -255,92 +265,261 @@ export function AdminPanelView({
         </div>
       )}
 
-      {/* Access Control: Lock New Registrations */}
+      {/* Access Approval Queue for New Users */}
       <section
-        aria-label="Controle de acesso e novos cadastros"
-        className={`border p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
-          registrationLocked
-            ? 'bg-[#211910] border-[#664C1C]'
+        aria-label="Solicitações de acesso de novos usuários"
+        className={`border p-5 space-y-4 transition-colors ${
+          pendingAccessRequests.length > 0
+            ? 'bg-[#1A1710] border-[#664C1C]'
             : 'bg-[#141614] border-[#262A26]'
         }`}
       >
-        <div className="space-y-1.5 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            {registrationLocked ? (
-              <Lock className="w-4 h-4 text-[#FBBF24] shrink-0" />
-            ) : (
-              <LockOpen className="w-4 h-4 text-[#4ADE80] shrink-0" />
-            )}
-            <h2 className="font-display text-base sm:text-lg font-semibold text-[#F2F2EE]">
-              Bloquear novos cadastros
-            </h2>
-            <span
-              className={`text-[11px] font-mono px-2 py-0.5 rounded border ${
-                registrationLocked
-                  ? 'bg-[#2B2010] border-[#78571D] text-[#FDE68A]'
-                  : 'bg-[#13261A] border-[#2C6B41] text-[#86EFAC]'
-              }`}
-            >
-              {registrationLocked ? 'BLOQUEADO · SOMENTE LEITURA' : 'CADASTROS ABERTOS'}
-            </span>
-          </div>
-          <p className="text-xs text-[#A8ACA5] leading-relaxed max-w-2xl">
-            Quando ativado, o botão <strong>Entrar com Google</strong> na tela de login fica
-            desabilitado (não clicável) e visitantes podem clicar em{' '}
-            <strong>Visualizar site (somente leitura)</strong> para navegar sem criar conta. O{' '}
-            <strong>Acesso Admin Mestre</strong> continua disponível.
-          </p>
-          {accessControl?.updatedByName && (
-            <p className="text-[11px] text-[#787D75]">
-              Última alteração por{' '}
-              <strong className="text-[#C8CBC4] font-medium">
-                {accessControl.updatedByName}
-              </strong>{' '}
-              · {formatTimestamp(accessControl.updatedAt)}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="space-y-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <Clock
+                className={`w-4 h-4 shrink-0 ${
+                  pendingAccessRequests.length > 0 ? 'text-[#FBBF24]' : 'text-[#4ADE80]'
+                }`}
+              />
+              <h2 className="font-display text-base sm:text-lg font-semibold text-[#F2F2EE]">
+                Solicitações de acesso
+              </h2>
+              <span
+                className={`text-[11px] font-mono px-2 py-0.5 rounded border tabular-nums ${
+                  pendingAccessRequests.length > 0
+                    ? 'bg-[#2B2010] border-[#78571D] text-[#FDE68A]'
+                    : 'bg-[#13261A] border-[#2C6B41] text-[#86EFAC]'
+                }`}
+              >
+                {pendingAccessRequests.length === 0
+                  ? 'NENHUMA PENDENTE'
+                  : `${pendingAccessRequests.length} ${
+                      pendingAccessRequests.length === 1 ? 'PENDENTE' : 'PENDENTES'
+                    }`}
+              </span>
+            </div>
+            <p className="text-xs text-[#A8ACA5] leading-relaxed max-w-2xl">
+              Membros já cadastrados entram normalmente. Novos usuários que fizerem login
+              com Google precisam da autorização de um administrador aqui antes de acessar
+              como membros. O modo somente leitura segue sempre disponível na tela inicial.
             </p>
+          </div>
+
+          {reviewedAccessRequests.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowRequestHistory((prev) => !prev)}
+              className="text-xs font-medium text-[#A8ACA5] hover:text-[#F2F2EE] underline underline-offset-4 whitespace-nowrap shrink-0 cursor-pointer self-start sm:self-center"
+            >
+              {showRequestHistory
+                ? 'Ocultar histórico'
+                : `Ver histórico (${reviewedAccessRequests.length})`}
+            </button>
           )}
         </div>
 
-        <button
-          type="button"
-          role="switch"
-          aria-checked={registrationLocked}
-          disabled={busyKey === 'toggle-registration-lock'}
-          onClick={() =>
-            runAction(
-              'toggle-registration-lock',
-              () => setRegistrationLocked(!registrationLocked),
-              !registrationLocked
-                ? 'Novos cadastros bloqueados. O botão de login com Google está desabilitado e visitantes podem acessar em modo somente leitura.'
-                : 'Novos cadastros liberados novamente na tela de login.',
-            )
-          }
-          className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold rounded-md border transition-colors whitespace-nowrap shrink-0 cursor-pointer disabled:opacity-50 ${
-            registrationLocked
-              ? 'bg-[#FBBF24] border-[#FBBF24] text-[#0C0D0C] hover:bg-[#FCD34D]'
-              : 'bg-[#0C0D0C] border-[#384038] text-[#F2F2EE] hover:border-[#FBBF24] hover:text-[#FDE68A]'
-          }`}
-        >
-          {registrationLocked ? (
-            <>
-              <LockOpen className="w-4 h-4 shrink-0" />
-              <span>
-                {busyKey === 'toggle-registration-lock'
-                  ? 'Atualizando...'
-                  : 'Liberar cadastros'}
-              </span>
-            </>
-          ) : (
-            <>
-              <Lock className="w-4 h-4 shrink-0" />
-              <span>
-                {busyKey === 'toggle-registration-lock'
-                  ? 'Atualizando...'
-                  : 'Bloquear cadastros'}
-              </span>
-            </>
-          )}
-        </button>
+        {pendingAccessRequests.length > 0 && (
+          <div className="divide-y divide-[#2B2418] border border-[#3B3019] bg-[#121311] rounded-md overflow-hidden">
+            {pendingAccessRequests.map((req) => (
+              <div key={req.uid} className="p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <MemberAvatar
+                      name={req.displayName}
+                      primarySrc={req.photoURL}
+                      size="md"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-serif text-base font-medium text-[#F2F2EE] truncate">
+                          {req.displayName}
+                        </p>
+                        <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#2B2010] border border-[#664C1C] text-[#FDE68A]">
+                          Pendente
+                        </span>
+                      </div>
+                      <p className="text-xs text-[#8C9288] mt-0.5">
+                        Solicitado {formatTimestamp(req.createdAt)} · UID:{' '}
+                        <span className="font-mono text-[#6E736B]">
+                          {req.uid.slice(0, 12)}…
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      disabled={busyKey === `approve-${req.uid}`}
+                      onClick={() =>
+                        runAction(
+                          `approve-${req.uid}`,
+                          async () => {
+                            await approveAccessRequest(req);
+                            if (rejectingUid === req.uid) {
+                              setRejectingUid(null);
+                              setRejectionReason('');
+                            }
+                          },
+                          `Acesso autorizado para ${req.displayName}!`,
+                        )
+                      }
+                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-[#16A34A] text-white hover:bg-[#15803D] rounded-md transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                      <span>
+                        {busyKey === `approve-${req.uid}`
+                          ? 'Aprovando...'
+                          : 'Autorizar acesso'}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRejectingUid(rejectingUid === req.uid ? null : req.uid);
+                        setRejectionReason('');
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#0C0D0C] border border-[#3F2222] text-[#F87171] hover:bg-[#291515] rounded-md transition-colors cursor-pointer"
+                    >
+                      <UserX className="w-3.5 h-3.5" />
+                      <span>Recusar</span>
+                    </button>
+                  </div>
+                </div>
+
+                {rejectingUid === req.uid && (
+                  <div className="bg-[#0C0D0C] border border-[#3F2222] p-3 rounded-md flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                    <input
+                      type="text"
+                      maxLength={LIMITS.ACCESS_REJECTION_REASON_MAX}
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                      placeholder="Motivo da recusa (opcional, visível ao solicitante)..."
+                      className="flex-1 px-3 py-2 text-xs bg-[#141614] border border-[#2C312C] rounded-md text-[#F2F2EE] placeholder:text-[#666B63] focus:outline-none focus:border-[#F87171]"
+                    />
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={busyKey === `reject-${req.uid}`}
+                        onClick={() =>
+                          runAction(
+                            `reject-${req.uid}`,
+                            async () => {
+                              await rejectAccessRequest(req.uid, rejectionReason);
+                              setRejectingUid(null);
+                              setRejectionReason('');
+                            },
+                            `Solicitação de ${req.displayName} recusada.`,
+                          )
+                        }
+                        className="px-3.5 py-2 text-xs font-semibold bg-[#B91C1C] text-white rounded-md hover:bg-[#DC2626] cursor-pointer disabled:opacity-50"
+                      >
+                        Confirmar recusa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRejectingUid(null);
+                          setRejectionReason('');
+                        }}
+                        className="px-2.5 py-2 text-xs text-[#8C9288] hover:text-[#F2F2EE] cursor-pointer"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {showRequestHistory && reviewedAccessRequests.length > 0 && (
+          <div className="pt-2 border-t border-[#232723] space-y-2.5">
+            <p className="text-[11px] font-mono uppercase tracking-[0.12em] text-[#787D75]">
+              Histórico de decisões ({reviewedAccessRequests.length})
+            </p>
+            <div className="divide-y divide-[#202420] border border-[#232723] bg-[#0F110F] rounded-md">
+              {reviewedAccessRequests.map((req) => (
+                <div
+                  key={req.uid}
+                  className="p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <MemberAvatar
+                      name={req.displayName}
+                      primarySrc={req.photoURL}
+                      size="sm"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-[#F2F2EE] truncate">
+                          {req.displayName}
+                        </span>
+                        <span
+                          className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+                            req.status === 'approved'
+                              ? 'bg-[#13261A] border-[#2C6B41] text-[#86EFAC]'
+                              : 'bg-[#291515] border-[#5B2121] text-[#FCA5A5]'
+                          }`}
+                        >
+                          {req.status === 'approved' ? 'Aprovado' : 'Recusado'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#787D75] mt-0.5">
+                        {req.reviewedByName ? `Por ${req.reviewedByName} · ` : ''}
+                        {formatTimestamp(req.updatedAt || req.createdAt)}
+                      </p>
+                      {req.status === 'rejected' && req.rejectionReason && (
+                        <p className="text-[11px] text-[#FCA5A5] mt-0.5">
+                          Motivo: {req.rejectionReason}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {req.status === 'rejected' && (
+                      <button
+                        type="button"
+                        disabled={busyKey === `reapprove-${req.uid}`}
+                        onClick={() =>
+                          runAction(
+                            `reapprove-${req.uid}`,
+                            () => approveAccessRequest(req),
+                            `Acesso autorizado para ${req.displayName}!`,
+                          )
+                        }
+                        className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium bg-[#142218] border border-[#22543D] text-[#4ADE80] hover:bg-[#193020] rounded cursor-pointer disabled:opacity-50"
+                      >
+                        <UserCheck className="w-3 h-3" />
+                        <span>Autorizar</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={busyKey === `delreq-${req.uid}`}
+                      onClick={() =>
+                        runAction(
+                          `delreq-${req.uid}`,
+                          () => deleteAccessRequest(req.uid),
+                          `Registro de ${req.displayName} removido do histórico.`,
+                        )
+                      }
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] text-[#8C9288] hover:text-[#F87171] border border-[#262A26] rounded cursor-pointer disabled:opacity-50"
+                      title="Remover do histórico"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Limpar</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Summary Metrics */}

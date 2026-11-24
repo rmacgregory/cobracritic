@@ -36,6 +36,11 @@
           "type": "object",
           "description": "Optional per-user notification toggles (comments, mentions, featuredRound, events, coverReports, liveToasts booleans)."
         },
+        "memberBadge": {
+          "type": "string",
+          "enum": ["cobra", "guest"],
+          "description": "Admin-managed user badge differentiating 'cobra' (Membro dos Cobras) from 'guest' (Convidado). Defaults to 'cobra' when omitted."
+        },
         "visibility": {
           "type": "string",
           "enum": ["group"],
@@ -960,44 +965,75 @@
         "updatedAt"
       ]
     },
-    "AccessControlConfig": {
-      "title": "AccessControlConfig",
-      "description": "Admin-managed registration lock setting stored at /groupConfig/accessControl. When registrationLocked is true, new member sign-ups are blocked and guests may browse in read-only mode.",
+    "AccessRequest": {
+      "title": "AccessRequest",
+      "description": "Pending, approved, or rejected membership access request submitted automatically when a new user signs in with Google without an existing /users profile. Deterministic ID is the requester UID.",
       "type": "object",
       "properties": {
-        "registrationLocked": {
-          "type": "boolean",
-          "description": "Whether new registrations / Google sign-in button are locked."
-        },
-        "updatedBy": {
+        "uid": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
           "pattern": "^[a-zA-Z0-9_\\-]+$",
-          "description": "UID of the admin who last updated the access control setting."
+          "description": "Firebase Auth UID of the requester."
         },
-        "updatedByName": {
+        "displayName": {
           "type": "string",
           "minLength": 1,
           "maxLength": 80,
-          "description": "Display name of the admin who last updated the setting."
+          "description": "Public display name from Google sign-in."
+        },
+        "photoURL": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Optional HTTPS avatar URL."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"],
+          "description": "Current admin review status of the access request."
+        },
+        "rejectionReason": {
+          "type": "string",
+          "maxLength": 300,
+          "description": "Optional reason written by an admin when rejecting access."
+        },
+        "reviewedBy": {
+          "type": "string",
+          "maxLength": 128,
+          "description": "UID of the admin who approved or rejected the request (empty while pending)."
+        },
+        "reviewedByName": {
+          "type": "string",
+          "maxLength": 80,
+          "description": "Display name of the admin who reviewed the request."
         },
         "visibility": {
           "type": "string",
           "enum": ["group"],
           "description": "Group scope identifier."
         },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of request creation."
+        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",
-          "description": "Server timestamp of update."
+          "description": "Server timestamp of last update."
         }
       },
       "required": [
-        "registrationLocked",
-        "updatedBy",
-        "updatedByName",
+        "uid",
+        "displayName",
+        "photoURL",
+        "status",
+        "rejectionReason",
+        "reviewedBy",
+        "reviewedByName",
         "visibility",
+        "createdAt",
         "updatedAt"
       ]
     }
@@ -1005,7 +1041,11 @@
   "firestore": {
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserProfile" },
-      "description": "Public group profiles for friends (no PII)."
+      "description": "Public group profiles for approved members (no PII)."
+    },
+    "/accessRequests/{userId}": {
+      "schema": { "$ref": "#/entities/AccessRequest" },
+      "description": "New user access requests awaiting admin approval or rejection. Deterministic ID equals requester UID."
     },
     "/admins/{userId}": {
       "schema": { "$ref": "#/entities/AdminGrant" },
@@ -1049,7 +1089,7 @@
     },
     "/groupConfig/{configId}": {
       "schema": { "$ref": "#/entities/FeaturedRoundConfig" },
-      "description": "Admin-managed shared group settings: featuredRound (FeaturedRoundConfig) and accessControl (AccessControlConfig)."
+      "description": "Admin-managed shared group settings: featuredRound (FeaturedRoundConfig)."
     },
     "/coverReports/{reportId}": {
       "schema": { "$ref": "#/entities/CoverReport" },

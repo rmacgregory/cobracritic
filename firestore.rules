@@ -46,13 +46,12 @@ service cloud.firestore {
       );
     }
 
-    function canMemberWrite() {
-      return (isVerified() || isAdmin()) && isNotBanned();
+    function isApprovedMember() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function isRegistrationOpen() {
-      return !exists(/databases/$(database)/documents/groupConfig/accessControl) ||
-        get(/databases/$(database)/documents/groupConfig/accessControl).data.registrationLocked != true;
+    function canMemberWrite() {
+      return (isAdmin() || (isVerified() && isApprovedMember())) && isNotBanned();
     }
 
     function isSafeOptionalUrl(url) {
@@ -125,17 +124,17 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'uid', 'displayName', 'photoURL', 'bio', 'topFiveGames', 'favoriteGenre',
-          'notificationPreferences', 'visibility', 'createdAt', 'updatedAt'
+          'notificationPreferences', 'memberBadge', 'visibility', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.uid) &&
         data.uid == userId &&
-        data.uid == request.auth.uid &&
         data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
         isSafeAvatarUrl(data.photoURL) &&
         data.bio is string && data.bio.size() <= 240 &&
         isValidTopFiveGames(data.topFiveGames) &&
         (!('favoriteGenre' in data) || (data.favoriteGenre is string && data.favoriteGenre.size() <= 40)) &&
         (!('notificationPreferences' in data) || isValidNotificationPreferences(data.notificationPreferences)) &&
+        (!('memberBadge' in data) || (data.memberBadge is string && data.memberBadge in ['cobra', 'guest'])) &&
         data.visibility is string && data.visibility == 'group' &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -409,18 +408,26 @@ service cloud.firestore {
         data.updatedAt is timestamp;
     }
 
-    function isValidAccessControlConfig(data) {
+    function isValidAccessRequest(data, userId) {
       return data.keys().hasAll([
-          'registrationLocked', 'updatedBy', 'updatedByName', 'visibility', 'updatedAt'
+          'uid', 'displayName', 'photoURL', 'status', 'rejectionReason',
+          'reviewedBy', 'reviewedByName', 'visibility', 'createdAt', 'updatedAt'
         ]) &&
         data.keys().hasOnly([
-          'registrationLocked', 'updatedBy', 'updatedByName', 'visibility', 'updatedAt'
+          'uid', 'displayName', 'photoURL', 'status', 'rejectionReason',
+          'reviewedBy', 'reviewedByName', 'visibility', 'createdAt', 'updatedAt'
         ]) &&
-        data.registrationLocked is bool &&
-        isValidId(data.updatedBy) &&
-        data.updatedBy == request.auth.uid &&
-        data.updatedByName is string && data.updatedByName.size() >= 1 && data.updatedByName.size() <= 80 &&
+        isValidId(data.uid) &&
+        data.uid == userId &&
+        data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+        isSafeOptionalUrl(data.photoURL) &&
+        data.status is string && data.status in ['pending', 'approved', 'rejected'] &&
+        data.rejectionReason is string && data.rejectionReason.size() <= 300 &&
+        data.reviewedBy is string && data.reviewedBy.size() <= 128 &&
+        (data.reviewedBy == '' || isValidId(data.reviewedBy)) &&
+        data.reviewedByName is string && data.reviewedByName.size() <= 80 &&
         data.visibility is string && data.visibility == 'group' &&
+        data.createdAt is timestamp &&
         data.updatedAt is timestamp;
     }
 
@@ -454,25 +461,94 @@ service cloud.firestore {
       allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
         isValidId(userId) &&
-        userId == request.auth.uid &&
         isValidUserProfile(incoming(), userId) &&
         incoming().createdAt == request.time &&
         incoming().updatedAt == request.time &&
-        canMemberWrite() &&
-        (isAdmin() || isRegistrationOpen());
+        (
+          isAdmin() ||
+          (
+            userId == request.auth.uid &&
+            !('memberBadge' in incoming()) &&
+            isVerified() &&
+            isNotBanned() &&
+            exists(/databases/$(database)/documents/accessRequests/$(userId)) &&
+            get(/databases/$(database)/documents/accessRequests/$(userId)).data.status == 'approved'
+          )
+        );
       allow update: if isSignedIn() &&
         isValidId(userId) &&
-        userId == request.auth.uid &&
         isValidUserProfile(incoming(), userId) &&
         incoming().uid == existing().uid &&
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
-        incoming().diff(existing()).affectedKeys().hasOnly([
-          'displayName', 'photoURL', 'bio', 'topFiveGames', 'favoriteGenre',
-          'notificationPreferences', 'updatedAt'
-        ]) &&
-        canMemberWrite();
+        (
+          (
+            userId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'photoURL', 'bio', 'topFiveGames', 'favoriteGenre',
+              'notificationPreferences', 'updatedAt'
+            ]) &&
+            canMemberWrite()
+          ) ||
+          (
+            isAdmin() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'memberBadge', 'updatedAt'
+            ])
+          )
+        );
       allow delete: if false;
+    }
+
+    // ---------------------------------------------------------
+    // Collection: /accessRequests/{userId} (Admin-Approved New User Onboarding)
+    // Deterministic ID: {requesterUid}
+    // ---------------------------------------------------------
+    match /accessRequests/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && resource.data.visibility == 'group';
+      allow create: if isSignedIn() &&
+        isValidId(userId) &&
+        userId == request.auth.uid &&
+        isVerified() &&
+        isNotBanned() &&
+        !exists(/databases/$(database)/documents/users/$(userId)) &&
+        isValidAccessRequest(incoming(), userId) &&
+        incoming().status == 'pending' &&
+        incoming().rejectionReason == '' &&
+        incoming().reviewedBy == '' &&
+        incoming().reviewedByName == '' &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isSignedIn() &&
+        isValidId(userId) &&
+        isValidAccessRequest(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          (
+            isAdmin() &&
+            incoming().reviewedBy == request.auth.uid &&
+            incoming().reviewedByName.size() >= 1 &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'rejectionReason', 'reviewedBy', 'reviewedByName', 'updatedAt'
+            ])
+          ) ||
+          (
+            userId == request.auth.uid &&
+            isVerified() &&
+            isNotBanned() &&
+            existing().status == 'pending' &&
+            incoming().status == 'pending' &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'displayName', 'photoURL', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isSignedIn() &&
+        isValidId(userId) &&
+        (isAdmin() || (userId == request.auth.uid && existing().status == 'pending'));
     }
 
     // ---------------------------------------------------------
@@ -827,36 +903,23 @@ service cloud.firestore {
     // Collection: /groupConfig/{configId} (Admin-Managed Group Settings)
     // ---------------------------------------------------------
     match /groupConfig/{configId} {
-      allow get: if configId in ['featuredRound', 'accessControl'] &&
+      allow get: if configId == 'featuredRound' &&
         (resource == null || existing().visibility == 'group');
       allow list: if resource.data.visibility == 'group';
       allow create: if isSignedIn() &&
+        configId == 'featuredRound' &&
+        isValidFeaturedRoundConfig(incoming()) &&
         incoming().updatedAt == request.time &&
-        isAdmin() &&
-        (
-          (configId == 'featuredRound' && isValidFeaturedRoundConfig(incoming())) ||
-          (configId == 'accessControl' && isValidAccessControlConfig(incoming()))
-        );
+        isAdmin();
       allow update: if isSignedIn() &&
+        configId == 'featuredRound' &&
+        isValidFeaturedRoundConfig(incoming()) &&
         incoming().updatedAt == request.time &&
-        isAdmin() &&
-        (
-          (
-            configId == 'featuredRound' &&
-            isValidFeaturedRoundConfig(incoming()) &&
-            incoming().diff(existing()).affectedKeys().hasOnly([
-              'gameId', 'title', 'coverUrl', 'roundLabel', 'eventId', 'note',
-              'pinnedBy', 'pinnedByName', 'updatedAt'
-            ])
-          ) ||
-          (
-            configId == 'accessControl' &&
-            isValidAccessControlConfig(incoming()) &&
-            incoming().diff(existing()).affectedKeys().hasOnly([
-              'registrationLocked', 'updatedBy', 'updatedByName', 'updatedAt'
-            ])
-          )
-        );
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'gameId', 'title', 'coverUrl', 'roundLabel', 'eventId', 'note',
+          'pinnedBy', 'pinnedByName', 'updatedAt'
+        ]) &&
+        isAdmin();
       allow delete: if isSignedIn() &&
         configId == 'featuredRound' &&
         isAdmin();

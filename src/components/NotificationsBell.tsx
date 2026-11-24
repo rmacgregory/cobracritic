@@ -10,6 +10,7 @@ import {
   Pin,
   SlidersHorizontal,
   Trophy,
+  UserPlus,
   X,
 } from 'lucide-react';
 import { useVeredito, type GroupActivityNotification } from '../context/VereditoContext';
@@ -20,6 +21,7 @@ interface NotificationsBellProps {
   onSelectGame: (gameId: string) => void;
   onEditGame?: (game: GameWithStats) => void;
   onSelectEvents?: () => void;
+  onSelectAdminPanel?: () => void;
   onOpenNotificationSettings?: () => void;
 }
 
@@ -27,6 +29,7 @@ export function NotificationsBell({
   onSelectGame,
   onEditGame,
   onSelectEvents,
+  onSelectAdminPanel,
   onOpenNotificationSettings,
 }: NotificationsBellProps) {
   const {
@@ -34,16 +37,19 @@ export function NotificationsBell({
     gamesWithStats,
     commentNotifications,
     coverReportNotifications,
+    accessRequestNotifications,
     groupNotifications,
     notificationPreferences,
     unreadNotificationCount,
     latestLiveNotification,
     latestLiveCoverReport,
+    latestLiveAccessRequest,
     latestLiveGroupNotification,
     markNotificationRead,
     markAllNotificationsRead,
     dismissLiveNotification,
     dismissLiveCoverReport,
+    dismissLiveAccessRequest,
     dismissLiveGroupNotification,
     resolveCoverReport,
   } = useVeredito();
@@ -123,15 +129,24 @@ export function NotificationsBell({
     }
   };
 
+  const handleOpenAccessRequest = (notifId: string) => {
+    markNotificationRead(notifId);
+    dismissLiveAccessRequest();
+    setOpen(false);
+    onSelectAdminPanel?.();
+  };
+
   const handleOpenSettings = () => {
     setOpen(false);
     onOpenNotificationSettings?.();
   };
 
   const adminCoverReports = isAdmin ? coverReportNotifications : [];
+  const adminAccessRequests = isAdmin ? accessRequestNotifications : [];
   const totalNotifications =
     commentNotifications.length +
     adminCoverReports.length +
+    adminAccessRequests.length +
     groupNotifications.length;
   const allCategoriesMuted =
     !notificationPreferences.comments &&
@@ -246,6 +261,63 @@ export function NotificationsBell({
               </div>
             ) : (
               <div className="max-h-[420px] overflow-y-auto divide-y divide-[#202420]">
+                {/* Admin-only Pending Access Requests */}
+                {adminAccessRequests.length > 0 && (
+                  <div>
+                    <div className="px-4 py-2 bg-[#1A1710] border-b border-[#332A14] flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-mono uppercase tracking-[0.12em] text-[#FBBF24] flex items-center gap-1.5">
+                        <UserPlus className="w-3 h-3" />
+                        <span>
+                          Solicitações de acesso · Admin ({adminAccessRequests.length})
+                        </span>
+                      </span>
+                    </div>
+                    <ul className="divide-y divide-[#232018]">
+                      {adminAccessRequests.slice(0, 15).map((req) => (
+                        <li key={req.id}>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenAccessRequest(req.id)}
+                            className={`w-full px-4 py-3 text-left flex items-start gap-3 transition-colors cursor-pointer ${
+                              req.unread
+                                ? 'bg-[#1D1910] hover:bg-[#252014]'
+                                : 'bg-[#151410] hover:bg-[#1B1914]'
+                            }`}
+                          >
+                            <div className="mt-0.5 shrink-0">
+                              <MemberAvatar
+                                name={req.displayName}
+                                primarySrc={req.photoURL}
+                                size="sm"
+                              />
+                            </div>
+                            <div className="min-w-0 flex-1 space-y-1">
+                              <p className="text-xs text-[#D6D3C8] leading-snug">
+                                <span className="font-semibold text-[#FDE68A]">
+                                  {req.displayName}
+                                </span>{' '}
+                                solicitou acesso ao CobraCritic.
+                              </p>
+                              <p className="text-[11px] text-[#A8A394]">
+                                Clique para aprovar ou recusar no Painel Admin.
+                              </p>
+                              <p className="text-[11px] text-[#7D7868]">
+                                {formatTimestamp(req.createdAt)}
+                              </p>
+                            </div>
+                            {req.unread && (
+                              <span
+                                className="w-2 h-2 rounded-full bg-[#FBBF24] mt-1.5 shrink-0"
+                                aria-label="Não lida"
+                              />
+                            )}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
                 {/* Admin-only Incorrect Cover Reports */}
                 {adminCoverReports.length > 0 && (
                   <div>
@@ -461,8 +533,50 @@ export function NotificationsBell({
         )}
       </div>
 
+      {/* Live real-time toast for Admins when a new user requests access */}
+      {isAdmin && latestLiveAccessRequest && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-5 right-5 z-50 max-w-sm w-[calc(100vw-2.5rem)] bg-[#1B1810] border border-[#5A4419] rounded-md shadow-2xl p-3.5 flex items-start gap-3"
+        >
+          <MemberAvatar
+            name={latestLiveAccessRequest.displayName}
+            primarySrc={latestLiveAccessRequest.photoURL}
+            size="sm"
+          />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <p className="text-[10px] font-mono uppercase tracking-wider text-[#FBBF24] flex items-center gap-1">
+              <UserPlus className="w-3 h-3" />
+              <span>Nova solicitação de acesso</span>
+            </p>
+            <p className="text-xs text-[#D6D3C8] leading-snug">
+              <span className="font-semibold text-[#FDE68A]">
+                {latestLiveAccessRequest.displayName}
+              </span>{' '}
+              aguarda autorização para entrar no CobraCritic.
+            </p>
+            <button
+              type="button"
+              onClick={() => handleOpenAccessRequest(latestLiveAccessRequest.id)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-[#FBBF24] text-[#0C0D0C] rounded hover:bg-[#FCD34D] cursor-pointer"
+            >
+              <span>Revisar no Painel Admin</span>
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={dismissLiveAccessRequest}
+            aria-label="Fechar aviso"
+            className="p-1 text-[#8C8675] hover:text-[#F2F2EE] transition-colors shrink-0 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Live real-time toast for Admins when a member reports an incorrect cover */}
-      {isAdmin && latestLiveCoverReport && (
+      {isAdmin && latestLiveCoverReport && !latestLiveAccessRequest && (
         <div
           role="status"
           aria-live="polite"
@@ -519,7 +633,9 @@ export function NotificationsBell({
       )}
 
       {/* Live real-time toast when a new comment arrives on one of your reviews */}
-      {latestLiveNotification && !(isAdmin && latestLiveCoverReport) && (
+      {latestLiveNotification &&
+        !(isAdmin && latestLiveAccessRequest) &&
+        !(isAdmin && latestLiveCoverReport) && (
         <div
           role="status"
           aria-live="polite"
@@ -574,6 +690,7 @@ export function NotificationsBell({
       {/* Live real-time toast for Jogo da Rodada or Event updates */}
       {latestLiveGroupNotification &&
         !latestLiveNotification &&
+        !(isAdmin && latestLiveAccessRequest) &&
         !(isAdmin && latestLiveCoverReport) && (
           <div
             role="status"

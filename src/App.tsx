@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ban, Check, Copy, Eye, LogIn, LogOut, Menu, Plus, Shield } from 'lucide-react';
+import { Ban, Check, Clock, Copy, Eye, LogIn, LogOut, Menu, Plus, Shield, ShieldX } from 'lucide-react';
 import { AdminPanelView } from './components/AdminPanelView';
 import { AuthGate } from './components/AuthGate';
 import { CatalogView } from './components/CatalogView';
@@ -44,7 +44,8 @@ function CobraCriticShell() {
     gamesWithStats,
     members,
     myStatusByGame,
-    registrationLocked,
+    accessStatus,
+    myAccessRequest,
     readOnlyMode,
     enterReadOnlyMode,
     exitReadOnlyMode,
@@ -175,11 +176,128 @@ function CobraCriticShell() {
         onSignIn={signInWithGoogle}
         onAdminSignIn={signInWithAdminCredentials}
         onEnterReadOnly={enterReadOnlyMode}
-        registrationLocked={registrationLocked}
         signingIn={signingIn}
         authError={authError}
         adminAuthError={adminAuthError}
       />
+    );
+  }
+
+  if (user && accessStatus === 'loading') {
+    return (
+      <div className="min-h-screen bg-[#0C0D0C] text-[#90968C] flex items-center justify-center">
+        <p className="text-sm font-mono">Verificando acesso...</p>
+      </div>
+    );
+  }
+
+  if (user && accessStatus === 'pending') {
+    return (
+      <div className="min-h-screen bg-[#0C0D0C] text-[#F2F2EE] flex flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md bg-[#141614] border border-[#3C331A] p-8 text-center space-y-6">
+          <img
+            src={resolveAssetUrl(COBRA_LOGO_PATH)}
+            alt="CobraCritic"
+            className="h-9 w-auto mx-auto object-contain"
+          />
+          <div className="space-y-2.5">
+            <div className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-[0.14em] text-[#FBBF24]">
+              <Clock className="w-4 h-4" />
+              <span>Aguardando aprovação</span>
+            </div>
+            <h1 className="font-display text-2xl font-semibold text-[#F2F2EE]">
+              Solicitação de acesso enviada
+            </h1>
+            <p className="text-sm text-[#C8CBC4] leading-relaxed">
+              Olá,{' '}
+              <strong className="text-[#F2F2EE]">
+                {myAccessRequest?.displayName || user.displayName || 'visitante'}
+              </strong>
+              ! Seu pedido para entrar no CobraCritic foi enviado aos administradores do
+              Grupo dos Cobras.
+            </p>
+            <p className="text-xs text-[#8C9288] leading-relaxed">
+              Assim que um administrador autorizar seu acesso, você poderá fazer login e
+              participar normalmente (esta tela libera automaticamente se você mantiver
+              aberta).
+            </p>
+          </div>
+
+          <div className="space-y-2.5 pt-1">
+            <button
+              type="button"
+              onClick={enterReadOnlyMode}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-[#13261A] border border-[#2C6B41] text-[#86EFAC] rounded-md hover:bg-[#193322] hover:text-white transition-colors cursor-pointer"
+            >
+              <Eye className="w-4 h-4 shrink-0" />
+              <span>Visualizar site (somente leitura)</span>
+            </button>
+            <button
+              type="button"
+              onClick={signOutUser}
+              className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-medium bg-[#0C0D0C] border border-[#2C312C] text-[#A8ACA5] hover:text-[#F2F2EE] rounded-md transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sair da conta</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (user && accessStatus === 'rejected') {
+    return (
+      <div className="min-h-screen bg-[#0C0D0C] text-[#F2F2EE] flex flex-col items-center justify-center px-4 py-12">
+        <div className="w-full max-w-md bg-[#141614] border border-[#3F2222] p-8 text-center space-y-6">
+          <img
+            src={resolveAssetUrl(COBRA_LOGO_PATH)}
+            alt="CobraCritic"
+            className="h-9 w-auto mx-auto object-contain"
+          />
+          <div className="space-y-2.5">
+            <div className="inline-flex items-center gap-1.5 text-xs font-mono uppercase tracking-[0.14em] text-[#F87171]">
+              <ShieldX className="w-4 h-4" />
+              <span>Acesso recusado</span>
+            </div>
+            <h1 className="font-display text-2xl font-semibold text-[#F2F2EE]">
+              Cadastro não autorizado
+            </h1>
+            <p className="text-sm text-[#C8CBC4] leading-relaxed">
+              Sua solicitação de acesso ao CobraCritic foi recusada pela administração do
+              Grupo dos Cobras.
+            </p>
+            {myAccessRequest?.rejectionReason && (
+              <p className="text-xs text-[#FCA5A5] bg-[#1C1212] border border-[#4C2323] p-3 rounded-md">
+                Motivo: {myAccessRequest.rejectionReason}
+              </p>
+            )}
+            <p className="text-xs text-[#8C9288] leading-relaxed">
+              Você ainda pode explorar o catálogo, críticas e rankings no modo somente
+              leitura.
+            </p>
+          </div>
+
+          <div className="space-y-2.5 pt-1">
+            <button
+              type="button"
+              onClick={enterReadOnlyMode}
+              className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold bg-[#13261A] border border-[#2C6B41] text-[#86EFAC] rounded-md hover:bg-[#193322] hover:text-white transition-colors cursor-pointer"
+            >
+              <Eye className="w-4 h-4 shrink-0" />
+              <span>Visualizar site (somente leitura)</span>
+            </button>
+            <button
+              type="button"
+              onClick={signOutUser}
+              className="inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-medium bg-[#0C0D0C] border border-[#2C312C] text-[#A8ACA5] hover:text-[#F2F2EE] rounded-md transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>Sair da conta</span>
+            </button>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -432,6 +550,7 @@ function CobraCriticShell() {
                   onSelectGame={handleSelectGame}
                   onEditGame={handleOpenEditGame}
                   onSelectEvents={() => handleSelectTab('events')}
+                  onSelectAdminPanel={() => handleSelectTab('admin')}
                   onOpenNotificationSettings={handleOpenNotificationSettings}
                 />
 
@@ -558,6 +677,7 @@ function CobraCriticShell() {
 
       {reviewModalTarget && (
         <ReviewFormModal
+          key={`${reviewModalTarget.game.id}_${reviewModalTarget.existing?.id ?? 'new'}`}
           game={reviewModalTarget.game}
           existingReview={reviewModalTarget.existing}
           initialPlayStatus={myStatusByGame[reviewModalTarget.game.id] ?? null}

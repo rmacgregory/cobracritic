@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Award, Ban, CheckCircle2, EyeOff, Gamepad2, Trash2, X } from 'lucide-react';
 import {
   GAME_PLAY_STATUS_META,
@@ -54,6 +54,15 @@ export function ReviewFormModal({
   const [playStatus, setPlayStatus] = useState<GameProgressStatus | null>(
     initialPlayStatus && initialPlayStatus !== 'wishlist' ? initialPlayStatus : null,
   );
+  const [playStatusTouched, setPlayStatusTouched] = useState(false);
+
+  useEffect(() => {
+    if (!playStatusTouched) {
+      setPlayStatus(
+        initialPlayStatus && initialPlayStatus !== 'wishlist' ? initialPlayStatus : null,
+      );
+    }
+  }, [initialPlayStatus, playStatusTouched]);
   const [headline, setHeadline] = useState(existingReview?.headline || '');
   const [body, setBody] = useState(existingReview?.body || '');
   const [platformPlayed, setPlatformPlayed] = useState(
@@ -256,7 +265,10 @@ export function ReviewFormModal({
               {playStatus && (
                 <button
                   type="button"
-                  onClick={() => setPlayStatus(null)}
+                  onClick={() => {
+                    setPlayStatusTouched(true);
+                    setPlayStatus(null);
+                  }}
                   className="text-[11px] text-[#8C9288] hover:text-[#F87171] transition-colors cursor-pointer"
                 >
                   Limpar status
@@ -272,7 +284,10 @@ export function ReviewFormModal({
                   <button
                     key={st}
                     type="button"
-                    onClick={() => setPlayStatus(active ? null : st)}
+                    onClick={() => {
+                      setPlayStatusTouched(true);
+                      setPlayStatus(active ? null : st);
+                    }}
                     aria-pressed={active}
                     className={`inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md border transition-colors cursor-pointer ${
                       active

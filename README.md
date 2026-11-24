@@ -115,14 +115,17 @@ Principais pilares da plataforma:
   - menções `@membro`;
   - novo **Jogo da Rodada** fixado;
   - atualizações em **Eventos** (abertura de indicações, votação ou encerramento);
-  - reportes de capa incorreta (para administradores).
+  - reportes de capa incorreta e novas **solicitações de acesso** (para administradores).
 - **Painel de Preferências de Notificação** (em *Meu Perfil*): cada usuário escolhe individualmente quais tipos de alertas e toasts deseja receber, com salvamento instantâneo no Firestore e atalho direto no menu do sino.
 
 ### 10. Administração e Moderação
-- **Autenticação**: login com **Google** e suporte a conta administrativa dedicada.
+- **Autenticação e Aprovação de Novos Usuários**:
+  - **Membros já cadastrados** fazem login normalmente com Google a qualquer momento;
+  - **Novos usuários** que entrarem com Google enviam automaticamente uma **solicitação de acesso** e aguardam aprovação ou recusa de um administrador no **Painel Admin** (com atualização em tempo real);
+  - **Modo somente leitura** sempre ativo na tela inicial (**Visualizar site (somente leitura)**) para visitantes explorarem catálogo, críticas, ranking, retrospectiva e eventos sem cadastrar ou logar (mantendo as abas de Membros, Meu Perfil e Painel Admin ocultas).
 - **Modo “Ver como usuário”**: botão no cabeçalho (ao lado das notificações) que permite ao administrador alternar instantaneamente para a visão de membro comum para testar telas e fluxos sem privilégios visuais de admin.
 - **Painel Admin**:
-  - **Bloquear novos cadastros & Modo somente leitura**: interruptor que desabilita o botão de login com Google na tela inicial e bloqueia novos perfis no Firestore, liberando o botão **Visualizar site (somente leitura)** para visitantes navegarem pelo catálogo, críticas, ranking, retrospectiva e eventos sem criar conta (mantendo as abas de Membros, Meu Perfil e Painel Admin ocultas para visitantes, e o Acesso Admin Mestre ativo);
+  - fila de **Solicitações de acesso** em tempo real com ações de **Autorizar acesso**, **Recusar** (com motivo opcional) e histórico de decisões;
   - gestão de membros, concessão/revogação de privilégios de administrador (inclusive por UID), banimento com motivo e desbanimento;
   - moderação de jogos, críticas, comentários e limpeza de conteúdo;
   - fila de **reportes de capa incorreta** com acesso rápido à edição da ficha e resolução.
@@ -190,7 +193,8 @@ Principais pilares da plataforma:
 
 | Coleção | Finalidade |
 | --- | --- |
-| `users` | Perfil público dos membros, Top 5 e `notificationPreferences` |
+| `users` | Perfil público dos membros aprovados, Top 5 e `notificationPreferences` |
+| `accessRequests` | Solicitações de acesso de novos usuários (`pending`, `approved`, `rejected`) |
 | `games` | Catálogo de jogos cadastrados pelo grupo |
 | `reviews` | Notas (0–100), críticas, modo *apenas nota*, spoiler, plataforma e horas |
 | `comments` | Comentários e respostas encadeadas com `hasSpoiler` e `mentionedUserIds` |
@@ -199,7 +203,7 @@ Principais pilares da plataforma:
 | `events` | Eventos do grupo (`poll` ou `award`), categorias, indicados, prazo e vencedores |
 | `eventVotes` | Votos/palpites por categoria em cada evento |
 | `eventNominations` | Indicações enviadas pelos membros (1 jogo por membro por evento) |
-| `groupConfig` | Configurações do grupo (`featuredRound` para o *Jogo da Rodada* e `accessControl` para o bloqueio de novos cadastros) |
+| `groupConfig` | Configurações do grupo (`featuredRound` para o *Jogo da Rodada*) |
 | `coverReports` | Reportes de capa incorreta para moderação administrativa |
 | `admins` | Lista de UIDs com privilégios de administrador |
 | `bans` | Registros de suspensão de contas |

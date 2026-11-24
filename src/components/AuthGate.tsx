@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, Eye, Lock, Shield } from 'lucide-react';
+import { ChevronDown, ChevronUp, Eye, Shield } from 'lucide-react';
 import { COBRA_LOGO_PATH, resolveAssetUrl } from '../types';
 
 interface AuthGateProps {
   onSignIn: () => void;
   onAdminSignIn: (usernameOrEmail: string, password: string) => Promise<void>;
   onEnterReadOnly: () => void;
-  registrationLocked: boolean;
   signingIn: boolean;
   authError: string | null;
   adminAuthError: string | null;
@@ -16,7 +15,6 @@ export function AuthGate({
   onSignIn,
   onAdminSignIn,
   onEnterReadOnly,
-  registrationLocked,
   signingIn,
   authError,
   adminAuthError,
@@ -40,50 +38,29 @@ export function AuthGate({
           className="w-full max-w-[420px] h-auto object-contain select-none"
         />
 
-        <div className="w-full max-w-[340px] flex flex-col items-center space-y-4">
+        <div className="w-full max-w-[340px] flex flex-col items-center space-y-3.5">
           <button
             type="button"
-            onClick={registrationLocked ? undefined : onSignIn}
-            disabled={signingIn || registrationLocked}
-            aria-disabled={signingIn || registrationLocked}
-            title={
-              registrationLocked
-                ? 'Novos cadastros estão bloqueados pela administração'
-                : 'Entrar com sua conta Google'
-            }
-            className={`w-full px-6 py-3.5 text-sm font-semibold rounded-md transition-colors inline-flex items-center justify-center gap-2 ${
-              registrationLocked
-                ? 'bg-[#1A1D1A] border border-[#2C312C] text-[#6E746B] opacity-70 cursor-not-allowed pointer-events-none select-none'
-                : 'bg-[#F2F2EE] text-[#0C0D0C] hover:bg-white disabled:opacity-50 cursor-pointer'
-            }`}
+            onClick={onSignIn}
+            disabled={signingIn}
+            className="w-full px-6 py-3.5 text-sm font-semibold rounded-md transition-colors inline-flex items-center justify-center gap-2 bg-[#F2F2EE] text-[#0C0D0C] hover:bg-white disabled:opacity-50 cursor-pointer"
           >
-            {registrationLocked && <Lock className="w-4 h-4 shrink-0" />}
-            <span>
-              {registrationLocked
-                ? 'Entrar com Google (bloqueado)'
-                : signingIn
-                  ? 'Conectando...'
-                  : 'Entrar com Google'}
-            </span>
+            <span>{signingIn ? 'Conectando...' : 'Entrar com Google'}</span>
           </button>
 
-          {registrationLocked && (
-            <div className="w-full space-y-3">
-              <p className="text-xs text-[#90968C] text-center leading-relaxed">
-                Novos cadastros estão temporariamente bloqueados pela administração.
-                Você ainda pode explorar o catálogo, críticas e rankings em modo somente leitura.
-              </p>
+          <button
+            type="button"
+            onClick={onEnterReadOnly}
+            className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold bg-[#13261A] border border-[#2C6B41] text-[#86EFAC] rounded-md hover:bg-[#193322] hover:text-white transition-colors cursor-pointer"
+          >
+            <Eye className="w-4 h-4 shrink-0" />
+            <span>Visualizar site (somente leitura)</span>
+          </button>
 
-              <button
-                type="button"
-                onClick={onEnterReadOnly}
-                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold bg-[#13261A] border border-[#2C6B41] text-[#86EFAC] rounded-md hover:bg-[#193322] hover:text-white transition-colors cursor-pointer"
-              >
-                <Eye className="w-4 h-4 shrink-0" />
-                <span>Visualizar site (somente leitura)</span>
-              </button>
-            </div>
-          )}
+          <p className="text-[11px] text-[#8C9288] text-center leading-relaxed pt-0.5">
+            Membros já cadastrados entram normalmente. Novos cadastros precisam de
+            aprovação de um administrador.
+          </p>
 
           {authError && (
             <p className="text-sm text-[#F87171] text-center" role="alert">

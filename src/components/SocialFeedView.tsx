@@ -1,5 +1,11 @@
-import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Search,
+} from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import { formatTimestamp, type GameWithStats, type Review } from '../types';
 import { FeaturedRoundBanner } from './FeaturedRoundBanner';
@@ -14,6 +20,143 @@ interface SocialFeedViewProps {
 
 type SentimentFilter = 'all' | 'positive' | 'mixed' | 'negative';
 
+const POSTS_PER_PAGE = 10;
+
+function getPageItems(currentPage: number, totalPages: number): (number | 'ellipsis')[] {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, idx) => idx + 1);
+  }
+  const pages: (number | 'ellipsis')[] = [1];
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) pages.push('ellipsis');
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+  if (end < totalPages - 1) pages.push('ellipsis');
+  pages.push(totalPages);
+  return pages;
+}
+
+interface FeedPaginationProps {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  startItem: number;
+  endItem: number;
+  onPageChange: (page: number) => void;
+}
+
+function FeedPagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  startItem,
+  endItem,
+  onPageChange,
+}: FeedPaginationProps) {
+  const pageItems = getPageItems(currentPage, totalPages);
+
+  return (
+    <nav
+      aria-label="Paginação do feed"
+      className="bg-[#141614] border border-[#262A26] px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+    >
+      <p className="text-xs text-[#8C9288] tabular-nums">
+        Mostrando{' '}
+        <strong className="text-[#F2F2EE] font-mono">
+          {startItem}–{endItem}
+        </strong>{' '}
+        de <strong className="text-[#F2F2EE] font-mono">{totalItems}</strong>{' '}
+        {totalItems === 1 ? 'post' : 'posts'}
+      </p>
+
+      {totalPages > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {currentPage >= 2 && (
+            <button
+              type="button"
+              onClick={() => onPageChange(1)}
+              aria-label="Voltar para a primeira página"
+              title="Primeira página"
+              className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-[#2A2F2A] bg-[#0C0D0C] text-[#C8CBC4] hover:text-[#F2F2EE] hover:border-[#4ADE80]/60 transition-colors cursor-pointer"
+            >
+              <ChevronsLeft className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Primeira</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            disabled={currentPage <= 1}
+            onClick={() => onPageChange(currentPage - 1)}
+            aria-label="Página anterior"
+            title="Página anterior"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-[#2A2F2A] bg-[#0C0D0C] text-[#C8CBC4] hover:text-[#F2F2EE] hover:border-[#4ADE80]/60 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Anterior</span>
+          </button>
+
+          <div className="flex items-center gap-1">
+            {pageItems.map((item, idx) =>
+              item === 'ellipsis' ? (
+                <span
+                  key={`ellipsis-${idx}`}
+                  className="px-1.5 text-xs font-mono text-[#6E736B] select-none"
+                  aria-hidden="true"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => onPageChange(item)}
+                  aria-label={`Página ${item}`}
+                  aria-current={item === currentPage ? 'page' : undefined}
+                  className={`min-w-[30px] h-[30px] px-2 text-xs font-mono font-medium rounded-md border transition-colors tabular-nums cursor-pointer ${
+                    item === currentPage
+                      ? 'bg-[#4ADE80] border-[#4ADE80] text-[#0C0D0C] font-semibold'
+                      : 'bg-[#0C0D0C] border-[#2A2F2A] text-[#A8ACA5] hover:text-[#F2F2EE] hover:border-[#495249]'
+                  }`}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+          </div>
+
+          <button
+            type="button"
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange(currentPage + 1)}
+            aria-label="Próxima página"
+            title="Próxima página"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-[#2A2F2A] bg-[#0C0D0C] text-[#C8CBC4] hover:text-[#F2F2EE] hover:border-[#4ADE80]/60 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+          >
+            <span className="hidden sm:inline">Próxima</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            type="button"
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange(totalPages)}
+            aria-label="Ir para a última página"
+            title="Última página"
+            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-[#2A2F2A] bg-[#0C0D0C] text-[#C8CBC4] hover:text-[#F2F2EE] hover:border-[#4ADE80]/60 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+          >
+            <span className="hidden md:inline">Última</span>
+            <ChevronsRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </nav>
+  );
+}
+
 export function SocialFeedView({
   onSelectGame,
   onSelectAuthor,
@@ -25,6 +168,8 @@ export function SocialFeedView({
   const [selectedAuthor, setSelectedAuthor] = useState('all');
   const [sentiment, setSentiment] = useState<SentimentFilter>('all');
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const feedStreamTopRef = useRef<HTMLDivElement | null>(null);
 
   const gamesById = useMemo(() => {
     const map = new Map<string, GameWithStats>();
@@ -61,6 +206,39 @@ export function SocialFeedView({
     });
   }, [reviews, selectedAuthor, sentiment, search, gamesById]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedAuthor, sentiment, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredReviews.length / POSTS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedReviews = useMemo(() => {
+    const startIdx = (safePage - 1) * POSTS_PER_PAGE;
+    return filteredReviews.slice(startIdx, startIdx + POSTS_PER_PAGE);
+  }, [filteredReviews, safePage]);
+
+  const startItem =
+    filteredReviews.length === 0 ? 0 : (safePage - 1) * POSTS_PER_PAGE + 1;
+  const endItem = Math.min(safePage * POSTS_PER_PAGE, filteredReviews.length);
+
+  const handlePageChange = (nextPage: number) => {
+    const clamped = Math.min(Math.max(1, nextPage), totalPages);
+    if (clamped === safePage) return;
+    setCurrentPage(clamped);
+    if (feedStreamTopRef.current) {
+      feedStreamTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const recentComments = useMemo(() => {
     return [...comments].reverse().slice(0, 8);
   }, [comments]);
@@ -90,7 +268,7 @@ export function SocialFeedView({
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Main Review Stream */}
-        <div className="lg:col-span-8 space-y-6">
+        <div ref={feedStreamTopRef} className="lg:col-span-8 space-y-6 scroll-mt-20">
           <div className="bg-[#141614] border border-[#262A26] p-4 flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-[#787D75] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -169,23 +347,43 @@ export function SocialFeedView({
             </div>
           ) : (
             <div className="space-y-6">
-              {filteredReviews.map((review) => {
-                const game = gamesById.get(review.gameId) || null;
-                return (
-                  <ReviewCard
-                    key={review.id}
-                    review={review}
-                    game={game}
-                    showGameHeader
-                    defaultCommentsOpen
-                    onSelectGame={onSelectGame}
-                    onSelectAuthor={onSelectAuthor}
-                    onEditReview={
-                      game ? (rev) => onEditReview(game, rev) : undefined
-                    }
-                  />
-                );
-              })}
+              <FeedPagination
+                currentPage={safePage}
+                totalPages={totalPages}
+                totalItems={filteredReviews.length}
+                startItem={startItem}
+                endItem={endItem}
+                onPageChange={handlePageChange}
+              />
+
+              <div className="space-y-6">
+                {paginatedReviews.map((review) => {
+                  const game = gamesById.get(review.gameId) || null;
+                  return (
+                    <ReviewCard
+                      key={review.id}
+                      review={review}
+                      game={game}
+                      showGameHeader
+                      defaultCommentsOpen
+                      onSelectGame={onSelectGame}
+                      onSelectAuthor={onSelectAuthor}
+                      onEditReview={
+                        game ? (rev) => onEditReview(game, rev) : undefined
+                      }
+                    />
+                  );
+                })}
+              </div>
+
+              <FeedPagination
+                currentPage={safePage}
+                totalPages={totalPages}
+                totalItems={filteredReviews.length}
+                startItem={startItem}
+                endItem={endItem}
+                onPageChange={handlePageChange}
+              />
             </div>
           )}
         </div>
