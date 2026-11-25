@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Award, BarChart3, Calculator, HelpCircle, Scale, Trophy, X } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
-import { formatReleaseDate, getScoreMeta } from '../types';
+import { BAYESIAN_WEIGHT_PRIOR, formatReleaseDate, getScoreMeta } from '../types';
 import { ScoreBadge } from './ScoreBadge';
 
 interface RankingViewProps {
@@ -10,6 +11,25 @@ interface RankingViewProps {
 
 export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) {
   const { user, gamesWithStats, reviews, members } = useVeredito();
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
+
+  useEffect(() => {
+    if (!showHowItWorks) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowHowItWorks(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showHowItWorks]);
+
+  const priorBaseScore = useMemo(() => {
+    if (reviews.length === 0) return 75;
+    const globalMean =
+      reviews.reduce((sum, rev) => sum + rev.score, 0) / reviews.length;
+    return Math.min(globalMean, 75);
+  }, [reviews]);
 
   const rankedGames = useMemo(() => {
     return gamesWithStats
@@ -103,13 +123,23 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
 
       {/* Main Ranking Table */}
       <section aria-label="Melhores jogos segundo o grupo" className="space-y-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="font-display text-2xl font-semibold text-[#F2F2EE]">
-            Classificação Geral (Top Jogos)
-          </h2>
-          <p className="text-xs text-[#787D75]">
-            Ordenado pelo índice ponderado (média + peso do número de avaliações)
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-2xl font-semibold text-[#F2F2EE]">
+              Classificação Geral (Top Jogos)
+            </h2>
+            <p className="text-xs text-[#787D75] mt-1">
+              Ordenado pelo índice ponderado (média + peso do número de avaliações)
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowHowItWorks(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium text-[#D8DCD5] bg-[#181B18] border border-[#2C322C] hover:bg-[#202420] hover:border-[#3E473E] hover:text-[#F2F2EE] transition-colors cursor-pointer"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-[#4ADE80]" />
+            Como funciona o ranking?
+          </button>
         </div>
 
         {rankedGames.length === 0 ? (
@@ -289,6 +319,171 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
           </section>
         )}
       </div>
+
+      {showHowItWorks && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ranking-explanation-title"
+          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-[2px] flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setShowHowItWorks(false)}
+        >
+          <div
+            className="bg-[#141614] border border-[#2A2F2A] w-full max-w-2xl max-h-[92vh] overflow-y-auto my-auto text-[#F2F2EE]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="sticky top-0 z-10 bg-[#141614] border-b border-[#232723] px-6 py-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-[#142018] border border-[#244A31] flex items-center justify-center shrink-0">
+                  <Trophy className="w-4 h-4 text-[#4ADE80]" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-mono uppercase tracking-wider text-[#4ADE80]">
+                    Critério do Top Jogos
+                  </p>
+                  <h3
+                    id="ranking-explanation-title"
+                    className="font-display text-xl font-semibold text-[#F2F2EE] mt-0.5"
+                  >
+                    Como funciona o Ranking do CobraCritic?
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHowItWorks(false)}
+                aria-label="Fechar janela de explicação"
+                className="p-2 text-[#8C9288] hover:text-[#F2F2EE] hover:bg-[#1E221E] transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-6 text-sm text-[#C7CBC4] leading-relaxed">
+              <p className="text-[#D8DCD5] bg-[#181B18] border border-[#252A25] p-4">
+                Se o ranking olhasse apenas para a <strong className="text-[#F2F2EE]">Média simples</strong>, um jogo
+                que só 1 pessoa jogou e deu nota <span className="font-mono text-[#F2F2EE]">95</span> ficaria
+                acima de um jogo que 6 Cobras jogaram e teve média{' '}
+                <span className="font-mono text-[#F2F2EE]">93</span>. Para evitar essa distorção, o ranking
+                ordena os jogos pelo <strong className="text-[#4ADE80]">Índice (Média Ponderada)</strong> e
+                não só pela nota média bruta.
+              </p>
+
+              <div className="space-y-2.5">
+                <h4 className="font-serif text-base font-medium text-[#F2F2EE] flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-[#4ADE80] shrink-0" />
+                  A regra na prática
+                </h4>
+                <p>
+                  Todo jogo começa com um <strong className="text-[#F2F2EE]">&ldquo;peso base&rdquo;</strong> de{' '}
+                  <strong className="text-[#F2F2EE]">{BAYESIAN_WEIGHT_PRIOR} avaliações neutras</strong> (nota{' '}
+                  <span className="font-mono text-[#F2F2EE]">75</span>).
+                </p>
+                <div className="space-y-2 pt-1">
+                  <div className="bg-[#181B18] border-l-2 border-[#787D75] px-4 py-3">
+                    <p className="text-xs font-mono uppercase tracking-wider text-[#F2F2EE] mb-1">
+                      Poucas avaliações (1 ou 2 críticas)
+                    </p>
+                    <p className="text-xs sm:text-sm text-[#A8ACA5]">
+                      Como ainda há poucas opiniões do grupo, o Índice puxa a nota do jogo levemente em
+                      direção a <span className="font-mono text-[#F2F2EE]">75</span> (por segurança).
+                    </p>
+                  </div>
+                  <div className="bg-[#142018] border-l-2 border-[#4ADE80] px-4 py-3">
+                    <p className="text-xs font-mono uppercase tracking-wider text-[#4ADE80] mb-1">
+                      Muitas avaliações (3, 4, 5+ críticas)
+                    </p>
+                    <p className="text-xs sm:text-sm text-[#C7CBC4]">
+                      Quanto mais Cobras avaliam o jogo, mais o &ldquo;peso neutro&rdquo; desaparece e o
+                      Índice se aproxima da Média real que o grupo deu.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <h4 className="font-serif text-base font-medium text-[#F2F2EE] flex items-center gap-2">
+                  <BarChart3 className="w-4 h-4 text-[#4ADE80] shrink-0" />
+                  Exemplo prático
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="bg-[#191C19] border border-[#262B26] p-4 space-y-1.5">
+                    <p className="text-xs font-mono text-[#8C9288]">
+                      JOGO A · 1 AVALIAÇÃO COM NOTA 95
+                    </p>
+                    <p className="text-sm text-[#D8DCD5]">
+                      Média = <span className="font-mono font-semibold text-[#F2F2EE]">95</span>, mas o Índice ={' '}
+                      <span className="font-mono font-semibold text-[#F2F2EE]">80.0</span>
+                    </p>
+                    <p className="text-xs text-[#787D75]">(porque só 1 pessoa avaliou)</p>
+                  </div>
+                  <div className="bg-[#142018] border border-[#244A31] p-4 space-y-1.5">
+                    <p className="text-xs font-mono text-[#4ADE80]">
+                      JOGO B · 5 AVALIAÇÕES COM MÉDIA 90
+                    </p>
+                    <p className="text-sm text-[#E5E8E3]">
+                      Média = <span className="font-mono font-semibold text-[#F2F2EE]">90</span>, e o Índice ={' '}
+                      <span className="font-mono font-semibold text-[#4ADE80]">84.4</span>
+                    </p>
+                    <p className="text-xs text-[#94A899]">(consenso real do grupo)</p>
+                  </div>
+                </div>
+                <p className="text-xs sm:text-sm text-[#D8DCD5] bg-[#181B18] border border-[#252A25] px-4 py-3">
+                  <strong className="text-[#4ADE80]">Resultado:</strong> O Jogo B fica na frente no Ranking
+                  porque foi aclamado por vários membros, mesmo tendo média bruta 90 contra 95.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-serif text-base font-medium text-[#F2F2EE] flex items-center gap-2">
+                  <Calculator className="w-4 h-4 text-[#4ADE80] shrink-0" />
+                  Como a fórmula calcula o Índice
+                </h4>
+                <div className="bg-[#101210] border border-[#232723] p-4 space-y-2">
+                  <p className="font-mono text-xs sm:text-sm text-[#F2F2EE] break-words">
+                    Índice = ((Nº de avaliações × Média do jogo) + ({BAYESIAN_WEIGHT_PRIOR} × Base)) ÷ (Nº de
+                    avaliações + {BAYESIAN_WEIGHT_PRIOR})
+                  </p>
+                  <p className="text-xs text-[#8C9288]">
+                    Atualmente, Base ={' '}
+                    <span className="font-mono text-[#4ADE80]">{priorBaseScore.toFixed(1)}</span> (mínimo
+                    entre 75 e a média global das críticas do grupo).
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="font-serif text-base font-medium text-[#F2F2EE] flex items-center gap-2">
+                  <Award className="w-4 h-4 text-[#4ADE80] shrink-0" />
+                  Critérios de desempate
+                </h4>
+                <p className="text-xs sm:text-sm text-[#A8ACA5]">
+                  Se dois jogos tiverem exatamente o mesmo Índice, fica na frente:
+                </p>
+                <ol className="list-decimal pl-5 space-y-1 text-[#C7CBC4]">
+                  <li>
+                    O jogo com <strong className="text-[#F2F2EE] font-medium">maior número de avaliações</strong>;
+                  </li>
+                  <li>
+                    Persistindo o empate, o que tiver a{' '}
+                    <strong className="text-[#F2F2EE] font-medium">maior Média simples</strong>.
+                  </li>
+                </ol>
+              </div>
+            </div>
+
+            <div className="border-t border-[#232723] px-6 py-4 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowHowItWorks(false)}
+                className="px-4 py-2 text-xs font-medium bg-[#4ADE80] text-[#0D130E] hover:bg-[#38C96D] transition-colors cursor-pointer"
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
