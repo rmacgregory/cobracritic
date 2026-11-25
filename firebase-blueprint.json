@@ -381,8 +381,8 @@
         },
         "type": {
           "type": "string",
-          "enum": ["agree"],
-          "description": "Type of reaction."
+          "enum": ["agree", "like", "dislike"],
+          "description": "Type of reaction ('like' or 'dislike'; legacy 'agree' is treated as 'like')."
         },
         "visibility": {
           "type": "string",
@@ -396,6 +396,64 @@
         }
       },
       "required": [
+        "reviewId",
+        "userId",
+        "userName",
+        "type",
+        "visibility",
+        "createdAt"
+      ]
+    },
+    "CommentReaction": {
+      "title": "CommentReaction",
+      "description": "A member's like or dislike reaction on a review comment (deterministic ID {commentId}_{userId}).",
+      "type": "object",
+      "properties": {
+        "commentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Reference ID of the reacted comment."
+        },
+        "reviewId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Reference ID of the parent review."
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "UID of the member reacting."
+        },
+        "userName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the member reacting."
+        },
+        "type": {
+          "type": "string",
+          "enum": ["like", "dislike"],
+          "description": "Reaction type ('like' or 'dislike')."
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["group"],
+          "description": "Group-shared visibility scope."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of reaction."
+        }
+      },
+      "required": [
+        "commentId",
         "reviewId",
         "userId",
         "userName",
@@ -1069,7 +1127,11 @@
     },
     "/reactions/{reactionId}": {
       "schema": { "$ref": "#/entities/ReviewReaction" },
-      "description": "Friend agreement reactions on reviews. Deterministic ID {reviewId}_{userId}."
+      "description": "Friend like/dislike reactions on reviews. Deterministic ID {reviewId}_{userId}."
+    },
+    "/commentReactions/{reactionId}": {
+      "schema": { "$ref": "#/entities/CommentReaction" },
+      "description": "Friend like/dislike reactions on comments. Deterministic ID {commentId}_{userId}."
     },
     "/events/{eventId}": {
       "schema": { "$ref": "#/entities/Event" },

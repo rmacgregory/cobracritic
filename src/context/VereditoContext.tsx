@@ -47,6 +47,7 @@ import {
   type AccessRequest,
   type AdminGrant,
   type CobraEvent,
+  type CommentReaction,
   type CoverReport,
   type EventCategory,
   type EventMode,
@@ -61,6 +62,7 @@ import {
   type GameWithStats,
   type MemberBadge,
   type NotificationPreferences,
+  type ReactionType,
   type Review,
   type ReviewComment,
   type ReviewInput,
@@ -210,6 +212,7 @@ interface VereditoContextValue {
   reviews: Review[];
   comments: ReviewComment[];
   reactions: ReviewReaction[];
+  commentReactions: CommentReaction[];
   events: CobraEvent[];
   eventVotes: EventVote[];
   eventNominations: EventNomination[];
@@ -233,6 +236,7 @@ interface VereditoContextValue {
   myOpenCoverReportGameIds: Set<string>;
   commentsByReview: Record<string, ReviewComment[]>;
   reactionsByReview: Record<string, ReviewReaction[]>;
+  commentReactionsByComment: Record<string, CommentReaction[]>;
   commentNotifications: CommentNotification[];
   coverReportNotifications: CoverReportNotification[];
   accessRequestNotifications: AccessRequestNotification[];
@@ -278,7 +282,12 @@ interface VereditoContextValue {
     },
   ) => Promise<void>;
   deleteComment: (commentId: string) => Promise<void>;
-  toggleReaction: (reviewId: string) => Promise<void>;
+  toggleReaction: (reviewId: string, type?: ReactionType) => Promise<void>;
+  toggleCommentReaction: (
+    commentId: string,
+    reviewId: string,
+    type: ReactionType,
+  ) => Promise<void>;
   seedStarterGames: () => Promise<void>;
   grantAdmin: (targetUid: string, displayName: string) => Promise<void>;
   revokeAdmin: (targetUid: string) => Promise<void>;
@@ -351,6 +360,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [comments, setComments] = useState<ReviewComment[]>([]);
   const [reactions, setReactions] = useState<ReviewReaction[]>([]);
+  const [commentReactions, setCommentReactions] = useState<CommentReaction[]>([]);
   const [events, setEvents] = useState<CobraEvent[]>([]);
   const [eventVotes, setEventVotes] = useState<EventVote[]>([]);
   const [eventNominations, setEventNominations] = useState<EventNomination[]>([]);
@@ -640,6 +650,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         setReviews([]);
         setComments([]);
         setReactions([]);
+        setCommentReactions([]);
         setEvents([]);
         setEventVotes([]);
         setEventNominations([]);
@@ -790,6 +801,18 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       (err) => handleFirestoreError(err, OperationType.LIST, 'reactions'),
     );
 
+    const unsubCommentReactions = onSnapshot(
+      query(collection(db, 'commentReactions'), where('visibility', '==', 'group')),
+      (snap) => {
+        const list = snap.docs.map((d) => ({
+          id: d.id,
+          ...(d.data() as Omit<CommentReaction, 'id'>),
+        }));
+        setCommentReactions(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'commentReactions'),
+    );
+
     eventsInitializedRef.current = false;
     seenEventStatusByIdRef.current = new Map();
 
@@ -914,6 +937,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       unsubReviews();
       unsubComments();
       unsubReactions();
+      unsubCommentReactions();
       unsubEvents();
       unsubEventVotes();
       unsubEventNominations();
@@ -1197,6 +1221,15 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     }
     return map;
   }, [reactions]);
+
+  const commentReactionsByComment = useMemo(() => {
+    const map: Record<string, CommentReaction[]> = {};
+    for (const reaction of commentReactions) {
+      if (!map[reaction.commentId]) map[reaction.commentId] = [];
+      map[reaction.commentId].push(reaction);
+    }
+    return map;
+  }, [commentReactions]);
 
   const nominationsByEvent = useMemo(() => {
     const map: Record<string, EventNomination[]> = {};
@@ -1889,9 +1922,18 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         const relatedReactions = reactions.filter((r) =>
           relatedReviewIds.has(r.reviewId),
         );
+        const relatedCommentIds = new Set(relatedComments.map((c) => c.id));
+        const relatedCommentReactions = commentReactions.filter(
+          (cr) =>
+            relatedCommentIds.has(cr.commentId) ||
+            relatedReviewIds.has(cr.reviewId),
+        );
         const relatedStatuses = userGameStatuses.filter((st) => st.gameId === gameId);
 
         await Promise.all([
+          ...relatedCommentReactions.map((cr) =>
+            deleteDoc(doc(db, 'commentReactions', cr.id)),
+          ),
           ...relatedComments.map((c) => deleteDoc(doc(db, 'comments', c.id))),
           ...relatedReactions.map((r) => deleteDoc(doc(db, 'reactions', r.id))),
           ...relatedStatuses.map((st) => deleteDoc(doc(db, 'userGameStatuses', st.id))),
@@ -1988,7 +2030,13 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
       if (isAdmin) {
         const relatedComments = comments.filter((c) => c.reviewId === reviewId);
         const relatedReactions = reactions.filter((r) => r.reviewId === reviewId);
+        const relatedCommentReactions = commentReactions.filter(
+          (cr) => cr.reviewId === reviewId,
+        );
         await Promise.all([
+          ...relatedCommentReactions.map((cr) =>
+            deleteDoc(doc(db, 'commentReactions', cr.id)),
+          ),
           ...relatedComments.map((c) => deleteDoc(doc(db, 'comments', c.id))),
           ...relatedReactions.map((r) => deleteDoc(doc(db, 'reactions', r.id))),
         ]);
@@ -2067,29 +2115,83 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     if (!user || isBanned) return;
     const path = `comments/${commentId}`;
     try {
+      const myCommentReaction = (commentReactionsByComment[commentId] || []).find(
+        (cr) => cr.userId === user.uid,
+      );
+      if (isAdmin) {
+        const relatedCommentReactions = commentReactionsByComment[commentId] || [];
+        await Promise.all(
+          relatedCommentReactions.map((cr) =>
+            deleteDoc(doc(db, 'commentReactions', cr.id)),
+          ),
+        );
+      } else if (myCommentReaction) {
+        await deleteDoc(doc(db, 'commentReactions', myCommentReaction.id));
+      }
       await deleteDoc(doc(db, 'comments', commentId));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }
   };
 
-  const toggleReaction = async (reviewId: string) => {
+  const toggleReaction = async (
+    reviewId: string,
+    type: ReactionType = 'like',
+  ) => {
     if (!user || isBanned) return;
+    const safeType: ReactionType = type === 'dislike' ? 'dislike' : 'like';
     const reactionId = `${reviewId}_${user.uid}`;
     const path = `reactions/${reactionId}`;
-    const alreadyExists = (reactionsByReview[reviewId] || []).some(
+    const existingReaction = (reactionsByReview[reviewId] || []).find(
       (r) => r.userId === user.uid,
     );
+    const existingNormalizedType: ReactionType | null = existingReaction
+      ? existingReaction.type === 'dislike'
+        ? 'dislike'
+        : 'like'
+      : null;
 
     try {
-      if (alreadyExists) {
+      if (existingReaction && existingNormalizedType === safeType) {
         await deleteDoc(doc(db, 'reactions', reactionId));
       } else {
         await setDoc(doc(db, 'reactions', reactionId), {
           reviewId,
           userId: user.uid,
           userName: getCurrentDisplayName(),
-          type: 'agree',
+          type: safeType,
+          visibility: 'group' as const,
+          createdAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  };
+
+  const toggleCommentReaction = async (
+    commentId: string,
+    reviewId: string,
+    type: ReactionType,
+  ) => {
+    if (!user || isBanned) return;
+    const safeType: ReactionType = type === 'dislike' ? 'dislike' : 'like';
+    const reactionId = `${commentId}_${user.uid}`;
+    const path = `commentReactions/${reactionId}`;
+    const existingReaction = (commentReactionsByComment[commentId] || []).find(
+      (r) => r.userId === user.uid,
+    );
+
+    try {
+      if (existingReaction && existingReaction.type === safeType) {
+        await deleteDoc(doc(db, 'commentReactions', reactionId));
+      } else {
+        await setDoc(doc(db, 'commentReactions', reactionId), {
+          commentId,
+          reviewId,
+          userId: user.uid,
+          userName: getCurrentDisplayName(),
+          type: safeType,
           visibility: 'group' as const,
           createdAt: serverTimestamp(),
         });
@@ -2203,9 +2305,19 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     const reactionsToDelete = reactions.filter(
       (r) => r.userId === targetUid || memberReviewIds.has(r.reviewId),
     );
+    const commentIdsToDelete = new Set(commentsToDelete.map((c) => c.id));
+    const commentReactionsToDelete = commentReactions.filter(
+      (cr) =>
+        cr.userId === targetUid ||
+        commentIdsToDelete.has(cr.commentId) ||
+        memberReviewIds.has(cr.reviewId),
+    );
 
     try {
       await Promise.all([
+        ...commentReactionsToDelete.map((cr) =>
+          deleteDoc(doc(db, 'commentReactions', cr.id)),
+        ),
         ...commentsToDelete.map((c) => deleteDoc(doc(db, 'comments', c.id))),
         ...reactionsToDelete.map((r) => deleteDoc(doc(db, 'reactions', r.id))),
       ]);
@@ -2760,6 +2872,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         reviews,
         comments,
         reactions,
+        commentReactions,
         events,
         eventVotes,
         eventNominations,
@@ -2783,6 +2896,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         myOpenCoverReportGameIds,
         commentsByReview,
         reactionsByReview,
+        commentReactionsByComment,
         commentNotifications,
         coverReportNotifications,
         accessRequestNotifications,
@@ -2812,6 +2926,7 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         addComment,
         deleteComment,
         toggleReaction,
+        toggleCommentReaction,
         seedStarterGames,
         grantAdmin,
         revokeAdmin,

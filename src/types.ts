@@ -266,12 +266,25 @@ export interface ReviewComment {
   createdAt?: Timestamp | null;
 }
 
+export type ReactionType = 'like' | 'dislike';
+
 export interface ReviewReaction {
   id: string;
   reviewId: string;
   userId: string;
   userName: string;
-  type: 'agree';
+  type: 'agree' | ReactionType;
+  visibility: 'group';
+  createdAt?: Timestamp | null;
+}
+
+export interface CommentReaction {
+  id: string;
+  commentId: string;
+  reviewId: string;
+  userId: string;
+  userName: string;
+  type: ReactionType;
   visibility: 'group';
   createdAt?: Timestamp | null;
 }

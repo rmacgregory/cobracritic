@@ -11,6 +11,7 @@ import {
   Send,
   Share2,
   Star,
+  ThumbsDown,
   ThumbsUp,
   Trash2,
   X,
@@ -23,6 +24,7 @@ import {
   getMemberBadgeMeta,
   getScoreMeta,
   type Game,
+  type ReactionType,
   type Review,
   type ReviewComment,
   type UserProfile,
@@ -161,16 +163,24 @@ export function ReviewCard({
     membersById,
     commentsByReview,
     reactionsByReview,
+    commentReactionsByComment,
     userStatusesByGame,
     addComment,
     deleteComment,
     deleteReview,
     toggleReaction,
+    toggleCommentReaction,
   } = useVeredito();
 
   const comments = commentsByReview[review.id] || [];
   const reactions = reactionsByReview[review.id] || [];
-  const hasAgreed = Boolean(user && reactions.some((r) => r.userId === user.uid));
+  const likeReactions = reactions.filter((r) => r.type !== 'dislike');
+  const dislikeReactions = reactions.filter((r) => r.type === 'dislike');
+  const myReaction = user
+    ? reactions.find((r) => r.userId === user.uid) || null
+    : null;
+  const hasLiked = Boolean(myReaction && myReaction.type !== 'dislike');
+  const hasDisliked = Boolean(myReaction && myReaction.type === 'dislike');
   const canModifyReview = Boolean(
     user && (review.authorId === user.uid || isAdmin),
   );
@@ -201,6 +211,7 @@ export function ReviewCard({
   const [revealedCommentIds, setRevealedCommentIds] = useState<Record<string, boolean>>({});
   const [showShareModal, setShowShareModal] = useState(false);
   const [togglingReaction, setTogglingReaction] = useState(false);
+  const [togglingCommentId, setTogglingCommentId] = useState<string | null>(null);
   const [confirmDeleteReview, setConfirmDeleteReview] = useState(false);
   const commentInputRef = useRef<HTMLInputElement | null>(null);
   const replyInputRef = useRef<HTMLInputElement | null>(null);
@@ -395,13 +406,26 @@ export function ReviewCard({
     }));
   };
 
-  const handleToggleAgree = async () => {
+  const handleToggleReviewReaction = async (type: ReactionType) => {
     if (togglingReaction) return;
     setTogglingReaction(true);
     try {
-      await toggleReaction(review.id);
+      await toggleReaction(review.id, type);
     } finally {
       setTogglingReaction(false);
+    }
+  };
+
+  const handleToggleCommentReaction = async (
+    commentId: string,
+    type: ReactionType,
+  ) => {
+    if (togglingCommentId === commentId) return;
+    setTogglingCommentId(commentId);
+    try {
+      await toggleCommentReaction(commentId, review.id, type);
+    } finally {
+      setTogglingCommentId(null);
     }
   };
 
@@ -602,39 +626,68 @@ export function ReviewCard({
 
       {/* Actions footer */}
       <div className="pt-3 border-t border-[#222622] flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-5">
+        <div className="flex flex-wrap items-center gap-4 sm:gap-5">
           {user ? (
-            <button
-              type="button"
-              onClick={handleToggleAgree}
-              disabled={togglingReaction}
-              className={`inline-flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
-                hasAgreed
-                  ? 'text-[#4ADE80]'
-                  : 'text-[#90968C] hover:text-[#F2F2EE]'
-              }`}
-            >
-              <ThumbsUp
-                className="w-4 h-4"
-                fill={hasAgreed ? 'currentColor' : 'none'}
-                strokeWidth={1.75}
-              />
-              <span className="tabular-nums">
-                {hasAgreed ? 'Concordou' : 'Concordar'}
-                {reactions.length > 0 ? ` (${reactions.length})` : ''}
-              </span>
-            </button>
+            <div className="inline-flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => handleToggleReviewReaction('like')}
+                disabled={togglingReaction}
+                aria-label="Dar like na crítica"
+                title={
+                  likeReactions.length > 0
+                    ? `Curtiu: ${likeReactions.map((r) => r.userName).join(', ')}`
+                    : 'Curtir crítica'
+                }
+                className={`inline-flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  hasLiked
+                    ? 'text-[#4ADE80]'
+                    : 'text-[#90968C] hover:text-[#F2F2EE]'
+                }`}
+              >
+                <ThumbsUp
+                  className="w-4 h-4"
+                  fill={hasLiked ? 'currentColor' : 'none'}
+                  strokeWidth={1.75}
+                />
+                <span className="tabular-nums">{likeReactions.length}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleToggleReviewReaction('dislike')}
+                disabled={togglingReaction}
+                aria-label="Dar dislike na crítica"
+                title={
+                  dislikeReactions.length > 0
+                    ? `Não curtiu: ${dislikeReactions.map((r) => r.userName).join(', ')}`
+                    : 'Dar dislike na crítica'
+                }
+                className={`inline-flex items-center gap-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  hasDisliked
+                    ? 'text-[#F87171]'
+                    : 'text-[#90968C] hover:text-[#F2F2EE]'
+                }`}
+              >
+                <ThumbsDown
+                  className="w-4 h-4"
+                  fill={hasDisliked ? 'currentColor' : 'none'}
+                  strokeWidth={1.75}
+                />
+                <span className="tabular-nums">{dislikeReactions.length}</span>
+              </button>
+            </div>
           ) : (
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-[#787D75]">
-              <ThumbsUp className="w-4 h-4" fill="none" strokeWidth={1.75} />
-              <span className="tabular-nums">
-                {reactions.length === 0
-                  ? '0 concordâncias'
-                  : reactions.length === 1
-                    ? '1 concordância'
-                    : `${reactions.length} concordâncias`}
+            <div className="inline-flex items-center gap-3 text-xs font-medium text-[#787D75]">
+              <span className="inline-flex items-center gap-1.5">
+                <ThumbsUp className="w-4 h-4" fill="none" strokeWidth={1.75} />
+                <span className="tabular-nums">{likeReactions.length}</span>
               </span>
-            </span>
+              <span className="inline-flex items-center gap-1.5">
+                <ThumbsDown className="w-4 h-4" fill="none" strokeWidth={1.75} />
+                <span className="tabular-nums">{dislikeReactions.length}</span>
+              </span>
+            </div>
           )}
 
           {user || comments.length > 0 ? (
@@ -669,10 +722,19 @@ export function ReviewCard({
           </button>
         </div>
 
-        {reactions.length > 0 && (
-          <p className="text-xs text-[#787D75] truncate max-w-xs">
-            Concordaram: {reactions.map((r) => r.userName.split(' ')[0]).join(', ')}
-          </p>
+        {(likeReactions.length > 0 || dislikeReactions.length > 0) && (
+          <div className="flex flex-wrap items-center gap-3 text-xs text-[#787D75]">
+            {likeReactions.length > 0 && (
+              <span className="truncate max-w-[220px]" title={likeReactions.map((r) => r.userName).join(', ')}>
+                Like: {likeReactions.map((r) => r.userName.split(' ')[0]).join(', ')}
+              </span>
+            )}
+            {dislikeReactions.length > 0 && (
+              <span className="truncate max-w-[220px]" title={dislikeReactions.map((r) => r.userName).join(', ')}>
+                Dislike: {dislikeReactions.map((r) => r.userName.split(' ')[0]).join(', ')}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -713,6 +775,16 @@ export function ReviewCard({
                       size="xs"
                     />
                   );
+
+                  const itemReactions = commentReactionsByComment[item.id] || [];
+                  const itemLikes = itemReactions.filter((cr) => cr.type === 'like');
+                  const itemDislikes = itemReactions.filter((cr) => cr.type === 'dislike');
+                  const myCommentReaction = user
+                    ? itemReactions.find((cr) => cr.userId === user.uid) || null
+                    : null;
+                  const commentLiked = myCommentReaction?.type === 'like';
+                  const commentDisliked = myCommentReaction?.type === 'dislike';
+                  const isBusyComment = togglingCommentId === item.id;
 
                   return (
                     <div className="flex items-start justify-between gap-3 text-sm">
@@ -795,6 +867,71 @@ export function ReviewCard({
                             </p>
                           )}
                           <div className="flex flex-wrap items-center gap-3 pt-0.5">
+                            {user ? (
+                              <div className="inline-flex items-center gap-2.5">
+                                <button
+                                  type="button"
+                                  disabled={isBusyComment}
+                                  onClick={() =>
+                                    handleToggleCommentReaction(item.id, 'like')
+                                  }
+                                  aria-label="Curtir comentário"
+                                  title={
+                                    itemLikes.length > 0
+                                      ? `Like: ${itemLikes.map((r) => r.userName).join(', ')}`
+                                      : 'Curtir comentário'
+                                  }
+                                  className={`inline-flex items-center gap-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                                    commentLiked
+                                      ? 'text-[#4ADE80]'
+                                      : 'text-[#8C9288] hover:text-[#F2F2EE]'
+                                  }`}
+                                >
+                                  <ThumbsUp
+                                    className="w-3 h-3"
+                                    fill={commentLiked ? 'currentColor' : 'none'}
+                                  />
+                                  <span className="tabular-nums">{itemLikes.length}</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  disabled={isBusyComment}
+                                  onClick={() =>
+                                    handleToggleCommentReaction(item.id, 'dislike')
+                                  }
+                                  aria-label="Dar dislike no comentário"
+                                  title={
+                                    itemDislikes.length > 0
+                                      ? `Dislike: ${itemDislikes.map((r) => r.userName).join(', ')}`
+                                      : 'Dar dislike no comentário'
+                                  }
+                                  className={`inline-flex items-center gap-1 text-[11px] font-medium transition-colors cursor-pointer ${
+                                    commentDisliked
+                                      ? 'text-[#F87171]'
+                                      : 'text-[#8C9288] hover:text-[#F2F2EE]'
+                                  }`}
+                                >
+                                  <ThumbsDown
+                                    className="w-3 h-3"
+                                    fill={commentDisliked ? 'currentColor' : 'none'}
+                                  />
+                                  <span className="tabular-nums">{itemDislikes.length}</span>
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="inline-flex items-center gap-2.5 text-[11px] font-medium text-[#787D75]">
+                                <span className="inline-flex items-center gap-1">
+                                  <ThumbsUp className="w-3 h-3" />
+                                  <span className="tabular-nums">{itemLikes.length}</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <ThumbsDown className="w-3 h-3" />
+                                  <span className="tabular-nums">{itemDislikes.length}</span>
+                                </span>
+                              </div>
+                            )}
+
                             {item.hasSpoiler && revealedCommentIds[item.id] && (
                               <button
                                 type="button"

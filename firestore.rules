@@ -287,7 +287,24 @@ service cloud.firestore {
         isValidId(data.userId) &&
         data.userId == request.auth.uid &&
         data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 80 &&
-        data.type is string && data.type == 'agree' &&
+        data.type is string && data.type in ['agree', 'like', 'dislike'] &&
+        data.visibility is string && data.visibility == 'group' &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidCommentReaction(data) {
+      return data.keys().hasAll([
+          'commentId', 'reviewId', 'userId', 'userName', 'type', 'visibility', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'commentId', 'reviewId', 'userId', 'userName', 'type', 'visibility', 'createdAt'
+        ]) &&
+        isValidId(data.commentId) &&
+        isValidId(data.reviewId) &&
+        isValidId(data.userId) &&
+        data.userId == request.auth.uid &&
+        data.userName is string && data.userName.size() >= 1 && data.userName.size() <= 80 &&
+        data.type is string && data.type in ['like', 'dislike'] &&
         data.visibility is string && data.visibility == 'group' &&
         data.createdAt is timestamp;
     }
@@ -694,7 +711,7 @@ service cloud.firestore {
     }
 
     // ---------------------------------------------------------
-    // Collection: /reactions/{reactionId} (Review Agreements)
+    // Collection: /reactions/{reactionId} (Review Like & Dislike Reactions)
     // Deterministic ID: {reviewId}_{userId}
     // ---------------------------------------------------------
     match /reactions/{reactionId} {
@@ -707,7 +724,49 @@ service cloud.firestore {
         incoming().createdAt == request.time &&
         canMemberWrite() &&
         exists(/databases/$(database)/documents/reviews/$(incoming().reviewId));
-      allow update: if false;
+      allow update: if isSignedIn() &&
+        isValidId(reactionId) &&
+        isValidReaction(incoming()) &&
+        existing().userId == request.auth.uid &&
+        incoming().reviewId == existing().reviewId &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'type', 'userName', 'createdAt'
+        ]) &&
+        canMemberWrite();
+      allow delete: if isSignedIn() &&
+        isValidId(reactionId) &&
+        canMemberWrite() &&
+        (existing().userId == request.auth.uid || isAdmin());
+    }
+
+    // ---------------------------------------------------------
+    // Collection: /commentReactions/{reactionId} (Comment Like & Dislike Reactions)
+    // Deterministic ID: {commentId}_{userId}
+    // ---------------------------------------------------------
+    match /commentReactions/{reactionId} {
+      allow get: if isValidId(reactionId) && (resource == null || existing().visibility == 'group');
+      allow list: if resource.data.visibility == 'group';
+      allow create: if isSignedIn() &&
+        isValidId(reactionId) &&
+        isValidCommentReaction(incoming()) &&
+        reactionId == incoming().commentId + '_' + request.auth.uid &&
+        incoming().createdAt == request.time &&
+        canMemberWrite() &&
+        exists(/databases/$(database)/documents/comments/$(incoming().commentId));
+      allow update: if isSignedIn() &&
+        isValidId(reactionId) &&
+        isValidCommentReaction(incoming()) &&
+        existing().userId == request.auth.uid &&
+        incoming().commentId == existing().commentId &&
+        incoming().reviewId == existing().reviewId &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'type', 'userName', 'createdAt'
+        ]) &&
+        canMemberWrite();
       allow delete: if isSignedIn() &&
         isValidId(reactionId) &&
         canMemberWrite() &&
