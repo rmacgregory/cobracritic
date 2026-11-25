@@ -9,7 +9,6 @@ import {
   MessageSquare,
   Pencil,
   Send,
-  Share2,
   Star,
   ThumbsDown,
   ThumbsUp,
@@ -32,7 +31,6 @@ import {
 import { GameCover } from './GameCover';
 import { MemberAvatar } from './MemberAvatar';
 import { ScoreBadge } from './ScoreBadge';
-import { ShareCardModal } from './ShareCardModal';
 
 function findActiveMention(
   text: string,
@@ -209,7 +207,6 @@ export function ReviewCard({
   const [collapsedThreads, setCollapsedThreads] = useState<Record<string, boolean>>({});
   const [reviewSpoilerRevealed, setReviewSpoilerRevealed] = useState(false);
   const [revealedCommentIds, setRevealedCommentIds] = useState<Record<string, boolean>>({});
-  const [showShareModal, setShowShareModal] = useState(false);
   const [togglingReaction, setTogglingReaction] = useState(false);
   const [togglingCommentId, setTogglingCommentId] = useState<string | null>(null);
   const [confirmDeleteReview, setConfirmDeleteReview] = useState(false);
@@ -711,15 +708,6 @@ export function ReviewCard({
               <span className="tabular-nums">0 comentários</span>
             </span>
           )}
-
-          <button
-            type="button"
-            onClick={() => setShowShareModal(true)}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-[#90968C] hover:text-[#4ADE80] transition-colors cursor-pointer"
-          >
-            <Share2 className="w-3.5 h-3.5" strokeWidth={1.75} />
-            <span>Compartilhar</span>
-          </button>
         </div>
 
         {(likeReactions.length > 0 || dislikeReactions.length > 0) && (
@@ -1280,30 +1268,6 @@ export function ReviewCard({
             </form>
           )}
         </div>
-      )}
-
-      {showShareModal && (
-        <ShareCardModal
-          payload={{
-            kind: 'review',
-            gameTitle: displayTitle,
-            developer: game?.developer || 'Grupo dos Cobras',
-            releaseYear: game?.releaseYear,
-            coverUrl: displayCover,
-            score: review.score,
-            authorName: resolvedAuthorName,
-            platformPlayed: review.platformPlayed,
-            hoursPlayed: review.hoursPlayed,
-            playStatusLabel: authorPlayStatus
-              ? GAME_PLAY_STATUS_META[authorPlayStatus].label
-              : undefined,
-            ratingOnly: isRatingOnly,
-            hasSpoiler: Boolean(review.hasSpoiler),
-            headline: review.headline,
-            body: review.body,
-          }}
-          onClose={() => setShowShareModal(false)}
-        />
       )}
     </article>
   );
