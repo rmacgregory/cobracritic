@@ -48,3 +48,41 @@
     scroll-behavior: auto !important;
   }
 }
+
+@keyframes crt-scanband-sweep {
+  0% {
+    transform: translateY(-24vh);
+  }
+  100% {
+    transform: translateY(115vh);
+  }
+}
+
+@keyframes crt-scanband-harmonic {
+  0% {
+    transform: translateY(-12vh);
+  }
+  100% {
+    transform: translateY(112vh);
+  }
+}
+
+.crt-scanband {
+  animation: crt-scanband-sweep 16s linear infinite;
+  will-change: transform;
+}
+
+.crt-scanband-thin {
+  animation: crt-scanband-harmonic 11s linear infinite;
+  will-change: transform;
+}
+
+html[data-crt='on'] body {
+  background-color: #040504;
+  text-shadow: 0 0 var(--crt-phosphor-text-blur, 3px) rgba(248, 250, 252, var(--crt-phosphor-text-alpha, 0.22));
+}
+
+.crt-warp-frame {
+  filter: url(#crt-barrel-warp) brightness(var(--crt-brightness, 1)) contrast(var(--crt-contrast, 1.06)) saturate(var(--crt-saturate, 1.12));
+}
+

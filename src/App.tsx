@@ -3,6 +3,7 @@ import { Ban, Check, Clock, Copy, Eye, LogIn, LogOut, Menu, Plus, Shield, Shield
 import { AdminPanelView } from './components/AdminPanelView';
 import { AuthGate } from './components/AuthGate';
 import { CatalogView } from './components/CatalogView';
+import { CrtOverlay, CrtSettingsModal, CrtWarpFilterSvg } from './components/CrtOverlay';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { EventsView } from './components/EventsView';
 import { GameDetailView } from './components/GameDetailView';
@@ -21,6 +22,7 @@ import { RetrospectiveView } from './components/RetrospectiveView';
 import { ReviewFormModal } from './components/ReviewFormModal';
 import { Sidebar } from './components/Sidebar';
 import { SocialFeedView } from './components/SocialFeedView';
+import { CrtProvider, scrollToAppTop, useCrt } from './context/CrtContext';
 import { VereditoProvider, useVeredito } from './context/VereditoContext';
 import {
   COBRA_LOGO_PATH,
@@ -100,26 +102,26 @@ function CobraCriticShell() {
       setSelectedGenre('all');
       setSelectedPlatform('all');
     }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToAppTop('smooth');
   };
 
   const handleSelectGenre = (genre: string) => {
     setActiveTab('catalog');
     setSelectedGameId(null);
     setSelectedGenre(genre);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToAppTop('smooth');
   };
 
   const handleSelectPlatform = (platform: string) => {
     setActiveTab('catalog');
     setSelectedGameId(null);
     setSelectedPlatform(platform);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToAppTop('smooth');
   };
 
   const handleSelectGame = (gameId: string) => {
     setSelectedGameId(gameId);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToAppTop('smooth');
   };
 
   const handleSelectMember = (memberUid: string | null) => {
@@ -127,7 +129,7 @@ function CobraCriticShell() {
     setActiveTab('members');
     setSelectedGameId(null);
     setSelectedMemberId(memberUid);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToAppTop('smooth');
   };
 
   const handleOpenNotificationSettings = () => {
@@ -142,7 +144,7 @@ function CobraCriticShell() {
     setSelectedMemberId(null);
     setInitialEventId(eventId ?? null);
     setActiveTab('events');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToAppTop('smooth');
   };
 
   const handleOpenNewGame = () => {
@@ -744,11 +746,53 @@ function CobraCriticShell() {
   );
 }
 
+function CrtViewportShell() {
+  const { settings } = useCrt();
+
+  return (
+    <>
+      <CrtWarpFilterSvg />
+      <div
+        id="crt-monitor-housing"
+        className={
+          settings.enabled
+            ? 'w-full h-dvh overflow-hidden bg-[#040504]'
+            : 'contents'
+        }
+      >
+        <div
+          id="crt-screen-frame"
+          className={
+            settings.enabled
+              ? 'crt-warp-frame relative w-full h-dvh overflow-hidden'
+              : 'contents'
+          }
+        >
+          <div
+            id="crt-scroll-container"
+            className={
+              settings.enabled
+                ? 'w-full h-full overflow-y-auto overflow-x-hidden bg-[#0C0D0C]'
+                : 'contents'
+            }
+          >
+            <CobraCriticShell />
+          </div>
+          <CrtSettingsModal />
+          <CrtOverlay />
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <VereditoProvider>
-        <CobraCriticShell />
+        <CrtProvider>
+          <CrtViewportShell />
+        </CrtProvider>
       </VereditoProvider>
     </ErrorBoundary>
   );

@@ -11,14 +11,17 @@ import {
   LogIn,
   LogOut,
   MessageSquareText,
+  Monitor,
   Search,
   Shield,
+  SlidersHorizontal,
   Tag,
   Trophy,
   User,
   Users,
   X,
 } from 'lucide-react';
+import { useCrt } from '../context/CrtContext';
 import { useVeredito } from '../context/VereditoContext';
 import {
   COBRA_LOGO_PATH,
@@ -256,6 +259,12 @@ export function Sidebar({
     signOutUser,
     exitReadOnlyMode,
   } = useVeredito();
+  const {
+    settings: crtSettings,
+    unlocked: crtUnlocked,
+    toggleCrt,
+    setConfigOpen: setCrtConfigOpen,
+  } = useCrt();
 
   const genreCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -441,6 +450,57 @@ export function Sidebar({
           icon={Gamepad2}
           onSelect={handlePlatformSelect}
         />
+
+        {/* CRT Monitor Mode & Configuration (hidden until unlocked) */}
+        {crtUnlocked && (
+          <div className="pt-4 border-t border-[#1F231F] space-y-2 px-2">
+            <p className="text-[11px] font-mono text-[#787D75] flex items-center gap-1.5">
+              <Monitor className="w-3 h-3 text-[#666B63]" />
+              <span>Monitor Retrô</span>
+            </p>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={toggleCrt}
+                aria-pressed={crtSettings.enabled}
+                title="Alternar filtro de monitor CRT"
+                className={`flex-1 min-w-0 px-2.5 py-2 rounded-md border text-xs font-medium flex items-center justify-between gap-1.5 transition-colors cursor-pointer ${
+                  crtSettings.enabled
+                    ? 'bg-[#16291D] border-[#4ADE80]/80 text-[#4ADE80] shadow-[0_0_12px_rgba(74,222,128,0.22)]'
+                    : 'bg-[#0C0D0C] border-[#262B26] text-[#C8CBC4] hover:text-[#F2F2EE] hover:border-[#3A433A]'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 min-w-0">
+                  <Monitor className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Modo CRT</span>
+                </span>
+                <span
+                  className={`px-1.5 py-0.5 text-[9px] font-mono font-semibold uppercase tracking-wider rounded border shrink-0 leading-none ${
+                    crtSettings.enabled
+                      ? 'bg-[#1E3B27] border-[#4ADE80]/45 text-[#86EFAC]'
+                      : 'bg-[#171B17] border-[#2F362F] text-[#9EA49B]'
+                  }`}
+                >
+                  ALPHA
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setCrtConfigOpen(true);
+                  onCloseMobile();
+                }}
+                aria-label="Configurar CRT"
+                title="Configurar CRT"
+                className="shrink-0 w-[34px] h-[34px] rounded-md border border-[#262B26] bg-[#0C0D0C] text-[#A8ACA5] hover:text-[#F2F2EE] hover:border-[#3A433A] flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="relative h-6">
           <RetroEasterEggSlot slot="sidebar" mode="corner" cornerOverride="br" />

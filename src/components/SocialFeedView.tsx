@@ -7,6 +7,7 @@ import {
   Search,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { scrollToAppTop } from '../context/CrtContext';
 import { useVeredito } from '../context/VereditoContext';
 import { formatTimestamp, type GameWithStats, type Review } from '../types';
 import { FeaturedRoundBanner } from './FeaturedRoundBanner';
@@ -239,7 +240,7 @@ export function SocialFeedView({
     if (feedStreamTopRef.current) {
       feedStreamTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToAppTop('smooth');
     }
   };
 

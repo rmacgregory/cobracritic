@@ -31,6 +31,7 @@ import {
   Vote,
   X,
 } from 'lucide-react';
+import { scrollToAppTop } from '../context/CrtContext';
 import { useVeredito } from '../context/VereditoContext';
 import {
   LIMITS,
@@ -1183,7 +1184,7 @@ export function EventsView({
     setFeedback(null);
     setSelectedEventId(ev.id);
     setViewMode(ev.status === 'inactive' && isAdmin ? 'builder' : 'public');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    scrollToAppTop('smooth');
   };
 
   const handleBackToHub = () => {

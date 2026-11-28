@@ -14,6 +14,7 @@ import {
   SlidersHorizontal,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import { scrollToAppTop } from '../context/CrtContext';
 import { useVeredito } from '../context/VereditoContext';
 import {
   GAME_PLAY_STATUS_LIST,
@@ -449,7 +450,7 @@ export function CatalogView({
     if (catalogTopRef.current) {
       catalogTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      scrollToAppTop('smooth');
     }
   };
 
