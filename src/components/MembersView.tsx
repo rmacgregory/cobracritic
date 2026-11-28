@@ -26,6 +26,20 @@ import {
 } from '../types';
 import { computeTasteAffinity, type MemberTasteAffinity } from '../utils/affinity';
 import { GameCover } from './GameCover';
+import {
+  BRONZE_EGGS,
+  EASTER_EGG_TIER_META,
+  EasterEggDetailModal,
+  EasterEggMasterBadge,
+  GOLD_EGGS,
+  KonamiSecretBadge,
+  RETRO_EASTER_EGGS,
+  RetroEasterEggSlot,
+  SILVER_EGGS,
+  hasCollectedAllEasterEggs,
+  isDungeonMasterUser,
+  type RetroEasterEgg,
+} from './RetroEasterEggs';
 import { ReviewCard } from './ReviewCard';
 import { ScoreBadge } from './ScoreBadge';
 import { ShareCardModal } from './ShareCardModal';
@@ -56,6 +70,7 @@ export function MembersView({
 }: MembersViewProps) {
   const {
     user,
+    profile,
     isAdmin,
     adminUids,
     bansByUid,
@@ -67,6 +82,7 @@ export function MembersView({
     grantAdmin,
     revokeAdmin,
     updateMemberBadge,
+    clearKonamiSecret,
     banUser,
     unbanUser,
   } = useVeredito();
@@ -78,6 +94,8 @@ export function MembersView({
   const [modBusy, setModBusy] = useState(false);
   const [shelfStatus, setShelfStatus] = useState<GamePlayStatus>('playing');
   const [showShareTop5, setShowShareTop5] = useState(false);
+  const [selectedEgg, setSelectedEgg] = useState<RetroEasterEgg | null>(null);
+  const [confirmClearMemberKonami, setConfirmClearMemberKonami] = useState(false);
 
   const gamesById = useMemo(() => {
     const map = new Map<string, GameWithStats>();
@@ -211,7 +229,8 @@ export function MembersView({
           <span>Voltar para todos os membros</span>
         </button>
 
-        <section className="bg-[#141614] border border-[#262A26] p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <section className="relative bg-[#141614] border border-[#262A26] p-6 sm:p-8 flex flex-col md:flex-row md:items-center justify-between gap-8">
+          <RetroEasterEggSlot slot="members-profile" mode="corner" />
           <div className="flex items-start gap-5 min-w-0">
             {activeMember.photoURL ? (
               <img
@@ -232,6 +251,51 @@ export function MembersView({
                 >
                   {getMemberBadgeMeta(activeMember.memberBadge).label}
                 </p>
+                {activeMember.konamiUnlocked && (
+                  <span className="inline-flex items-center gap-1.5 flex-wrap">
+                    <KonamiSecretBadge size="md" />
+                    {isDungeonMasterUser(user, profile) &&
+                      (confirmClearMemberKonami ? (
+                        <span className="inline-flex items-center gap-1.5 text-[10px] font-mono">
+                          <button
+                            type="button"
+                            disabled={modBusy}
+                            onClick={async () => {
+                              setModBusy(true);
+                              try {
+                                await clearKonamiSecret(activeMember.uid);
+                                setConfirmClearMemberKonami(false);
+                              } finally {
+                                setModBusy(false);
+                              }
+                            }}
+                            className="text-[#FCA5A5] hover:text-white underline cursor-pointer disabled:opacity-50"
+                          >
+                            {modBusy ? 'Apagando...' : 'Confirmar apagar selo'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmClearMemberKonami(false)}
+                            className="text-[#8C9288] hover:text-[#F2F2EE] cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmClearMemberKonami(true)}
+                          title="Apagar selo de segredo deste membro (apenas dungeonmaster)"
+                          className="text-[10px] font-mono text-[#FCA5A5] hover:underline cursor-pointer"
+                        >
+                          Apagar selo (DM)
+                        </button>
+                      ))}
+                  </span>
+                )}
+                {hasCollectedAllEasterEggs(activeMember.collectedEasterEggs) && (
+                  <EasterEggMasterBadge size="md" />
+                )}
                 {adminUids.has(activeMember.uid) && (
                   <span className="text-[11px] font-mono text-[#4ADE80] bg-[#16291D] border border-[#22543D] px-2 py-0.5 rounded">
                     Admin
@@ -429,6 +493,53 @@ export function MembersView({
                 {activeMember.commentsCount}
               </dd>
             </div>
+            {(() => {
+              const collectedList = activeMember.collectedEasterEggs || [];
+              const collectedSet = new Set(collectedList);
+              const b = BRONZE_EGGS.filter((e) => collectedSet.has(e.id)).length;
+              const s = SILVER_EGGS.filter((e) => collectedSet.has(e.id)).length;
+              const g = GOLD_EGGS.filter((e) => collectedSet.has(e.id)).length;
+              const isOwnProfile = Boolean(user && activeMember.uid === user.uid);
+              const collectedEggs = isOwnProfile
+                ? RETRO_EASTER_EGGS.filter((e) => collectedSet.has(e.id))
+                : [];
+              return (
+                <div className="col-span-2 pt-2 border-t border-[#202420] space-y-2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <dt className="text-xs text-[#8C9288]">Easter Eggs</dt>
+                    <dd className="font-mono text-sm font-semibold text-[#4ADE80] tabular-nums">
+                      {collectedList.length}/{RETRO_EASTER_EGGS.length}
+                    </dd>
+                  </div>
+                  <p className="font-mono text-[10px] text-[#787D75] tabular-nums text-right">
+                    Bronze {b}/{BRONZE_EGGS.length} · Prata {s}/{SILVER_EGGS.length} · Ouro {g}/{GOLD_EGGS.length}
+                  </p>
+                  {isOwnProfile && collectedEggs.length > 0 && (
+                    <div className="flex flex-wrap justify-end gap-1.5 pt-0.5 max-w-[280px] ml-auto">
+                      {collectedEggs.map((egg) => {
+                        const tierMeta = EASTER_EGG_TIER_META[egg.tier];
+                        return (
+                          <button
+                            key={egg.id}
+                            type="button"
+                            onClick={() => setSelectedEgg(egg)}
+                            title={`Ver detalhes: ${egg.name} (${egg.game})`}
+                            aria-label={`Ver detalhes do Easter Egg ${egg.name}`}
+                            className={`h-9 min-w-[38px] px-1.5 border flex items-center justify-center bg-[#101310] hover:bg-[#171C17] hover:border-[#4ADE80]/70 transition-colors cursor-pointer ${tierMeta.cardBorderClass}`}
+                          >
+                            <pre
+                              className={`font-mono text-[9px] leading-none whitespace-pre ${egg.colorClass}`}
+                            >
+                              {egg.chars}
+                            </pre>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </dl>
         </section>
 
@@ -733,6 +844,10 @@ export function MembersView({
             onClose={() => setShowShareTop5(false)}
           />
         )}
+        <EasterEggDetailModal
+          egg={user && activeMember.uid === user.uid ? selectedEgg : null}
+          onClose={() => setSelectedEgg(null)}
+        />
       </main>
     );
   }
@@ -753,7 +868,8 @@ export function MembersView({
       </div>
 
       {/* Member Search & Sort */}
-      <div className="bg-[#141614] border border-[#262A26] p-4 flex flex-col sm:flex-row gap-3">
+      <div className="relative bg-[#141614] border border-[#262A26] p-4 flex flex-col sm:flex-row gap-3">
+        <RetroEasterEggSlot slot="members-filters" mode="corner" />
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-[#787D75] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -763,6 +879,11 @@ export function MembersView({
             placeholder="Buscar membro por nome, bio ou jogo do Top 5..."
             aria-label="Buscar membros"
             className="w-full pl-9 pr-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] placeholder:text-[#787D75] focus:outline-none focus:border-[#4ADE80]"
+          />
+          <RetroEasterEggSlot
+            slot="members-search"
+            mode="corner"
+            cornerOverride="br"
           />
         </div>
 
@@ -836,6 +957,10 @@ export function MembersView({
                           >
                             {getMemberBadgeMeta(member.memberBadge).shortLabel}
                           </span>
+                          {member.konamiUnlocked && <KonamiSecretBadge size="sm" />}
+                          {hasCollectedAllEasterEggs(member.collectedEasterEggs) && (
+                            <EasterEggMasterBadge size="sm" />
+                          )}
                           {adminUids.has(member.uid) && (
                             <span className="text-[10px] font-mono text-[#4ADE80] shrink-0">
                               ADMIN

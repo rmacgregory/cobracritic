@@ -30,6 +30,12 @@ import {
 } from '../types';
 import { GameCover } from './GameCover';
 import { MemberAvatar } from './MemberAvatar';
+import {
+  EasterEggMasterBadge,
+  KonamiSecretBadge,
+  RetroEasterEggSlot,
+  hasCollectedAllEasterEggs,
+} from './RetroEasterEggs';
 import { ScoreBadge } from './ScoreBadge';
 
 function findActiveMention(
@@ -427,7 +433,8 @@ export function ReviewCard({
   };
 
   return (
-    <article className="bg-[#141614] border border-[#262A26] p-6 space-y-5">
+    <article className="relative bg-[#141614] border border-[#262A26] p-6 space-y-5">
+      <RetroEasterEggSlot slot={`review-card-${review.id}`} mode="corner" />
       {/* Optional game context bar for Social Feed */}
       {showGameHeader && (
         <div className="flex items-center justify-between gap-4 pb-4 border-b border-[#222622]">
@@ -487,6 +494,10 @@ export function ReviewCard({
               >
                 {getMemberBadgeMeta(liveAuthor?.memberBadge).label}
               </span>
+              {liveAuthor?.konamiUnlocked && <KonamiSecretBadge size="sm" />}
+              {hasCollectedAllEasterEggs(liveAuthor?.collectedEasterEggs) && (
+                <EasterEggMasterBadge size="sm" />
+              )}
               {adminUids.has(review.authorId) && (
                 <span className="text-[10px] font-mono text-[#4ADE80] shrink-0">
                   ADMIN

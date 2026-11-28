@@ -13,6 +13,10 @@ import { MembersView } from './components/MembersView';
 import { NotificationsBell } from './components/NotificationsBell';
 import { ProfileView } from './components/ProfileView';
 import { RankingView } from './components/RankingView';
+import {
+  EasterEggProvider,
+  RetroEasterEggSlot,
+} from './components/RetroEasterEggs';
 import { RetrospectiveView } from './components/RetrospectiveView';
 import { ReviewFormModal } from './components/ReviewFormModal';
 import { Sidebar } from './components/Sidebar';
@@ -435,7 +439,12 @@ function CobraCriticShell() {
   }
 
   return (
-    <div className="min-h-screen flex bg-[#0C0D0C] text-[#F2F2EE]">
+    <EasterEggProvider
+      activeTab={effectiveTab}
+      selectedGameId={selectedGameId}
+      selectedMemberId={selectedMemberId}
+    >
+      <div className="min-h-screen flex bg-[#0C0D0C] text-[#F2F2EE]">
       <Sidebar
         activeTab={effectiveTab}
         selectedGenre={selectedGenre}
@@ -450,6 +459,25 @@ function CobraCriticShell() {
       <div className="flex-1 min-w-0 flex flex-col">
         {/* Contextual Workspace Header with Global Search */}
         <header className="sticky top-0 z-30 h-16 bg-[#0C0D0C]/95 backdrop-blur-sm border-b border-[#232723] px-4 sm:px-8 flex items-center justify-between gap-4 sm:gap-6">
+          <RetroEasterEggSlot
+            slot="header-left"
+            mode="corner"
+            cornerOverride="tl"
+            className="hidden sm:inline-flex"
+          />
+          <RetroEasterEggSlot
+            slot="header"
+            mode="corner"
+            cornerOverride="bl"
+            className="hidden md:inline-flex"
+          />
+          <RetroEasterEggSlot
+            slot="header-right"
+            mode="corner"
+            cornerOverride="tr"
+            className="hidden lg:inline-flex"
+          />
+
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
@@ -645,14 +673,29 @@ function CobraCriticShell() {
           )}
         </div>
 
-        <footer className="border-t border-[#232723] mt-16">
+        <footer className="border-t border-[#232723] mt-16 relative">
+          <RetroEasterEggSlot
+            slot="footer-left"
+            mode="corner"
+            cornerOverride="tl"
+          />
+          <RetroEasterEggSlot
+            slot="footer"
+            mode="corner"
+            cornerOverride="bl"
+          />
+          <RetroEasterEggSlot slot="footer-right" mode="corner" />
           <div className="max-w-[1140px] mx-auto px-4 sm:px-8 py-6 flex flex-wrap items-center justify-between gap-4 text-xs text-[#787D75]">
-            <img
-              src={resolveAssetUrl(COBRA_LOGO_PATH)}
-              alt="CobraCritic"
-              className="h-5 w-auto object-contain opacity-85"
-            />
-            <p>Grupo dos Cobras · Catálogo manual e críticas de jogos.</p>
+            <div className="flex items-center gap-3">
+              <img
+                src={resolveAssetUrl(COBRA_LOGO_PATH)}
+                alt="CobraCritic"
+                className="h-5 w-auto object-contain opacity-85"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <p>Grupo dos Cobras · Catálogo manual e críticas de jogos.</p>
+            </div>
           </div>
         </footer>
       </div>
@@ -696,7 +739,8 @@ function CobraCriticShell() {
           }
         />
       )}
-    </div>
+      </div>
+    </EasterEggProvider>
   );
 }
 

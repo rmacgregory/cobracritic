@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useVeredito } from '../context/VereditoContext';
 import { formatTimestamp, type GameWithStats, type Review } from '../types';
 import { FeaturedRoundBanner } from './FeaturedRoundBanner';
+import { RetroEasterEggSlot } from './RetroEasterEggs';
 import { ReviewCard } from './ReviewCard';
 
 interface SocialFeedViewProps {
@@ -272,7 +273,8 @@ export function SocialFeedView({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Main Review Stream */}
         <div ref={feedStreamTopRef} className="lg:col-span-8 space-y-6 scroll-mt-20">
-          <div className="bg-[#141614] border border-[#262A26] p-4 flex flex-col sm:flex-row gap-3">
+          <div className="relative bg-[#141614] border border-[#262A26] p-4 flex flex-col sm:flex-row gap-3">
+            <RetroEasterEggSlot slot="feed-filters" mode="corner" />
             <div className="relative flex-1">
               <Search className="w-4 h-4 text-[#787D75] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
@@ -282,6 +284,11 @@ export function SocialFeedView({
                 placeholder="Buscar por jogo, membro ou trecho..."
                 aria-label="Buscar no feed"
                 className="w-full pl-9 pr-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] placeholder:text-[#787D75] focus:outline-none focus:border-[#4ADE80]"
+              />
+              <RetroEasterEggSlot
+                slot="feed-search"
+                mode="corner"
+                cornerOverride="br"
               />
             </div>
 
@@ -412,7 +419,8 @@ export function SocialFeedView({
 
         {/* Right Sidebar */}
         <aside className="lg:col-span-4 space-y-6">
-          <div className="bg-[#141614] border border-[#262A26] p-6 space-y-4">
+          <div className="relative bg-[#141614] border border-[#262A26] p-6 space-y-4">
+            <RetroEasterEggSlot slot="feed-pulse" mode="corner" />
             <h2 className="font-display text-lg font-semibold text-[#F2F2EE]">
               Pulso dos Cobras
             </h2>
@@ -444,7 +452,8 @@ export function SocialFeedView({
             </dl>
           </div>
 
-          <div className="bg-[#141614] border border-[#262A26] p-6 space-y-4">
+          <div className="relative bg-[#141614] border border-[#262A26] p-6 space-y-4">
+            <RetroEasterEggSlot slot="feed-comments" mode="corner" />
             <h2 className="font-display text-lg font-semibold text-[#F2F2EE]">
               Comentários Recentes
             </h2>
@@ -496,6 +505,10 @@ export function SocialFeedView({
                 })}
               </ul>
             )}
+          </div>
+
+          <div className="relative h-5">
+            <RetroEasterEggSlot slot="feed" mode="corner" cornerOverride="br" />
           </div>
         </aside>
       </div>

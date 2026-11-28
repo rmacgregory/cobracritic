@@ -19,6 +19,7 @@ import {
   type GameWithStats,
 } from '../types';
 import { GameCover } from './GameCover';
+import { RetroEasterEggSlot } from './RetroEasterEggs';
 import { ScoreBadge } from './ScoreBadge';
 
 interface CatalogViewProps {
@@ -340,7 +341,8 @@ export function CatalogView({
         </div>
 
         {/* Filter Bar: Search, Platform, Genre, Release Date, Sort */}
-        <div className="bg-[#141614] border border-[#262A26] p-4 space-y-4">
+        <div className="relative bg-[#141614] border border-[#262A26] p-4 space-y-4">
+          <RetroEasterEggSlot slot="catalog-filters" mode="corner" />
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
             <div className="md:col-span-4 relative">
               <Search className="w-4 h-4 text-[#787D75] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -351,6 +353,11 @@ export function CatalogView({
                 placeholder="Buscar jogo por título ou estúdio..."
                 aria-label="Buscar jogos"
                 className="w-full pl-9 pr-3 py-2 text-sm bg-[#0C0D0C] border border-[#2A2F2A] rounded-md text-[#F2F2EE] placeholder:text-[#787D75] focus:outline-none focus:border-[#4ADE80]"
+              />
+              <RetroEasterEggSlot
+                slot="catalog-search"
+                mode="corner"
+                cornerOverride="br"
               />
             </div>
 
@@ -679,6 +686,10 @@ export function CatalogView({
           </div>
         )}
       </section>
+
+      <div className="relative h-5">
+        <RetroEasterEggSlot slot="catalog" mode="corner" cornerOverride="br" />
+      </div>
     </main>
   );
 }

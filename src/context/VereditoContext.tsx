@@ -15,6 +15,8 @@ import {
   type User,
 } from 'firebase/auth';
 import {
+  arrayRemove,
+  arrayUnion,
   collection,
   deleteDoc,
   deleteField,
@@ -49,6 +51,7 @@ import {
   type CobraEvent,
   type CommentReaction,
   type CoverReport,
+  type EasterEggId,
   type EventCategory,
   type EventMode,
   type EventNomination,
@@ -265,6 +268,13 @@ interface VereditoContextValue {
   updateNotificationPreferences: (
     next: Partial<NotificationPreferences>,
   ) => Promise<void>;
+  collectEasterEgg: (
+    eggId: EasterEggId,
+  ) => Promise<{ newlyCollected: boolean; totalCount: number }>;
+  removeEasterEgg: (eggId: EasterEggId) => Promise<void>;
+  clearCollectedEasterEggs: () => Promise<void>;
+  unlockKonamiSecret: () => Promise<{ newlyUnlocked: boolean }>;
+  clearKonamiSecret: (targetUid?: string) => Promise<void>;
   createGame: (input: GameInput) => Promise<string>;
   updateGame: (gameId: string, input: GameInput) => Promise<void>;
   deleteGame: (gameId: string) => Promise<void>;
@@ -1811,6 +1821,101 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const collectEasterEgg = async (
+    eggId: EasterEggId,
+  ): Promise<{ newlyCollected: boolean; totalCount: number }> => {
+    const existingList = Array.isArray(profile?.collectedEasterEggs)
+      ? profile.collectedEasterEggs
+      : [];
+    const alreadyHad = existingList.includes(eggId);
+    if (!user || isBanned || !profile) {
+      return { newlyCollected: false, totalCount: existingList.length };
+    }
+    if (alreadyHad) {
+      return { newlyCollected: false, totalCount: existingList.length };
+    }
+    const path = `users/${user.uid}`;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        collectedEasterEggs: arrayUnion(eggId),
+        updatedAt: serverTimestamp(),
+      });
+      return { newlyCollected: true, totalCount: existingList.length + 1 };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+      return { newlyCollected: false, totalCount: existingList.length };
+    }
+  };
+
+  const isDungeonMaster = Boolean(
+    user &&
+      profile &&
+      ((user.email || '').trim().toLowerCase() ===
+        `dungeonmaster@${ADMIN_AUTH_DOMAIN}` ||
+        profile.displayName.trim().toLowerCase() === 'dungeonmaster' ||
+        (user.displayName || '').trim().toLowerCase() === 'dungeonmaster'),
+  );
+
+  const removeEasterEgg = async (eggId: EasterEggId): Promise<void> => {
+    if (!user || isBanned || !profile || !isDungeonMaster) return;
+    const path = `users/${user.uid}`;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        collectedEasterEggs: arrayRemove(eggId),
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const clearCollectedEasterEggs = async (): Promise<void> => {
+    if (!user || isBanned || !profile || !isDungeonMaster) return;
+    const path = `users/${user.uid}`;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        collectedEasterEggs: [],
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
+  const unlockKonamiSecret = async (): Promise<{ newlyUnlocked: boolean }> => {
+    if (!user || isBanned || !profile) {
+      return { newlyUnlocked: false };
+    }
+    if (profile.konamiUnlocked) {
+      return { newlyUnlocked: false };
+    }
+    const path = `users/${user.uid}`;
+    try {
+      await updateDoc(doc(db, 'users', user.uid), {
+        konamiUnlocked: true,
+        updatedAt: serverTimestamp(),
+      });
+      return { newlyUnlocked: true };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+      return { newlyUnlocked: false };
+    }
+  };
+
+  const clearKonamiSecret = async (targetUid?: string): Promise<void> => {
+    if (!user || isBanned || !profile || !isDungeonMaster) return;
+    const uidToClear = targetUid || user.uid;
+    const path = `users/${uidToClear}`;
+    try {
+      await updateDoc(doc(db, 'users', uidToClear), {
+        konamiUnlocked: false,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  };
+
   const createGame = async (input: GameInput): Promise<string> => {
     if (!user || isBanned) throw new Error('Faça login para cadastrar um jogo.');
     const gameId = createSafeId('game');
@@ -2919,6 +3024,11 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
         signOutUser,
         updateUserProfile,
         updateNotificationPreferences,
+        collectEasterEgg,
+        removeEasterEgg,
+        clearCollectedEasterEggs,
+        unlockKonamiSecret,
+        clearKonamiSecret,
         createGame,
         updateGame,
         deleteGame,

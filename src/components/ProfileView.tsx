@@ -30,6 +30,21 @@ import {
 } from '../types';
 import { AvatarCropModal } from './AvatarCropModal';
 import { GameCover } from './GameCover';
+import {
+  BRONZE_EGGS,
+  DungeonMasterEasterEggCatalog,
+  EASTER_EGG_TIER_META,
+  EasterEggDetailModal,
+  EasterEggMasterBadge,
+  GOLD_EGGS,
+  KonamiSecretBadge,
+  RETRO_EASTER_EGGS,
+  RetroEasterEggSlot,
+  SILVER_EGGS,
+  hasCollectedAllEasterEggs,
+  isDungeonMasterUser,
+  type RetroEasterEgg,
+} from './RetroEasterEggs';
 import { ReviewCard } from './ReviewCard';
 import { ShareCardModal } from './ShareCardModal';
 
@@ -57,6 +72,9 @@ export function ProfileView({
     notificationPreferences,
     updateUserProfile,
     updateNotificationPreferences,
+    removeEasterEgg,
+    clearCollectedEasterEggs,
+    clearKonamiSecret,
     signOutUser,
   } = useVeredito();
 
@@ -80,6 +98,11 @@ export function ProfileView({
   const [savedNotice, setSavedNotice] = useState(false);
   const [showShareTop5, setShowShareTop5] = useState(false);
   const [shelfStatus, setShelfStatus] = useState<GamePlayStatus>('playing');
+  const [selectedEgg, setSelectedEgg] = useState<RetroEasterEgg | null>(null);
+  const [confirmClearEggs, setConfirmClearEggs] = useState(false);
+  const [clearingEggs, setClearingEggs] = useState(false);
+  const [confirmClearKonami, setConfirmClearKonami] = useState(false);
+  const [clearingKonami, setClearingKonami] = useState(false);
 
   const [localPrefs, setLocalPrefs] = useState<NotificationPreferences>(
     notificationPreferences,
@@ -438,11 +461,58 @@ export function ProfileView({
           </div>
 
           <div className="min-w-0">
-            <p
-              className={`text-xs font-mono ${getMemberBadgeMeta(profile?.memberBadge).textClass}`}
-            >
-              {getMemberBadgeMeta(profile?.memberBadge).label}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p
+                className={`text-xs font-mono ${getMemberBadgeMeta(profile?.memberBadge).textClass}`}
+              >
+                {getMemberBadgeMeta(profile?.memberBadge).label}
+              </p>
+              {profile?.konamiUnlocked && (
+                <span className="inline-flex items-center gap-1.5 flex-wrap">
+                  <KonamiSecretBadge size="md" />
+                  {isDungeonMasterUser(user, profile) &&
+                    (confirmClearKonami ? (
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-mono">
+                        <button
+                          type="button"
+                          disabled={clearingKonami}
+                          onClick={async () => {
+                            setClearingKonami(true);
+                            try {
+                              await clearKonamiSecret();
+                              setConfirmClearKonami(false);
+                            } finally {
+                              setClearingKonami(false);
+                            }
+                          }}
+                          className="text-[#FCA5A5] hover:text-white underline cursor-pointer disabled:opacity-50"
+                        >
+                          {clearingKonami ? 'Apagando...' : 'Confirmar apagar selo'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmClearKonami(false)}
+                          className="text-[#8C9288] hover:text-[#F2F2EE] cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmClearKonami(true)}
+                        title="Apagar selo de segredo (apenas dungeonmaster)"
+                        className="text-[10px] font-mono text-[#FCA5A5] hover:underline cursor-pointer"
+                      >
+                        Apagar selo (DM)
+                      </button>
+                    ))}
+                </span>
+              )}
+              {hasCollectedAllEasterEggs(profile?.collectedEasterEggs) && (
+                <EasterEggMasterBadge size="md" />
+              )}
+            </div>
             <h1 className="font-display text-3xl sm:text-4xl font-semibold text-[#F2F2EE] mt-0.5 truncate">
               {shownName}
             </h1>
@@ -491,7 +561,8 @@ export function ProfileView({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left column: stats + edit profile + TOP 5 */}
         <section className="lg:col-span-5 space-y-6">
-          <div className="bg-[#141614] border border-[#262A26] p-6 space-y-4">
+          <div className="relative bg-[#141614] border border-[#262A26] p-6 space-y-4">
+            <RetroEasterEggSlot slot="profile-summary" mode="corner" />
             <h2 className="font-serif text-lg font-medium text-[#F2F2EE]">
               Resumo Pessoal
             </h2>
@@ -520,13 +591,134 @@ export function ProfileView({
                   {myCommentsCount}
                 </dd>
               </div>
+              {(() => {
+                const collectedList = profile?.collectedEasterEggs || [];
+                const collectedSet = new Set(collectedList);
+                const bronzeCount = BRONZE_EGGS.filter((e) =>
+                  collectedSet.has(e.id),
+                ).length;
+                const silverCount = SILVER_EGGS.filter((e) =>
+                  collectedSet.has(e.id),
+                ).length;
+                const goldCount = GOLD_EGGS.filter((e) =>
+                  collectedSet.has(e.id),
+                ).length;
+
+                return (
+                  <div className="col-span-2 pt-3 border-t border-[#202420] space-y-2.5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <dt className="text-xs text-[#8C9288]">
+                        Easter Eggs coletados
+                      </dt>
+                      <div className="flex items-center gap-2">
+                        {isDungeonMasterUser(user, profile) &&
+                          collectedList.length > 0 &&
+                          (confirmClearEggs ? (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-mono">
+                              <button
+                                type="button"
+                                disabled={clearingEggs}
+                                onClick={async () => {
+                                  setClearingEggs(true);
+                                  try {
+                                    await clearCollectedEasterEggs();
+                                    setConfirmClearEggs(false);
+                                  } finally {
+                                    setClearingEggs(false);
+                                  }
+                                }}
+                                className="text-[#FCA5A5] hover:text-white underline cursor-pointer disabled:opacity-50"
+                              >
+                                {clearingEggs ? 'Apagando...' : 'Confirmar zerar'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmClearEggs(false)}
+                                className="text-[#8C9288] hover:text-[#F2F2EE] cursor-pointer"
+                              >
+                                Cancelar
+                              </button>
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmClearEggs(true)}
+                              title="Apagar Easter Eggs coletados (apenas dungeonmaster)"
+                              className="text-[10px] font-mono text-[#FCA5A5] hover:underline cursor-pointer"
+                            >
+                              Zerar (DM)
+                            </button>
+                          ))}
+                        <dd className="font-mono text-sm font-semibold text-[#4ADE80] tabular-nums">
+                          {collectedList.length}/{RETRO_EASTER_EGGS.length}
+                        </dd>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono tabular-nums">
+                      <span
+                        className={`px-1.5 py-0.5 border rounded ${EASTER_EGG_TIER_META.bronze.pillClass}`}
+                      >
+                        Bronze {bronzeCount}/{BRONZE_EGGS.length}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.5 border rounded ${EASTER_EGG_TIER_META.silver.pillClass}`}
+                      >
+                        Prata {silverCount}/{SILVER_EGGS.length}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.5 border rounded ${EASTER_EGG_TIER_META.gold.pillClass}`}
+                      >
+                        Ouro {goldCount}/{GOLD_EGGS.length}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5">
+                      {RETRO_EASTER_EGGS.map((egg) => {
+                        const found = collectedSet.has(egg.id);
+                        const tierMeta = EASTER_EGG_TIER_META[egg.tier];
+                        if (found) {
+                          return (
+                            <button
+                              key={egg.id}
+                              type="button"
+                              onClick={() => setSelectedEgg(egg)}
+                              title={`Ver detalhes: ${egg.name} (${egg.game})`}
+                              aria-label={`Ver detalhes do Easter Egg ${egg.name}`}
+                              className={`h-10 px-1.5 border flex flex-col items-center justify-center text-center select-none bg-[#101310] hover:bg-[#171C17] hover:border-[#4ADE80]/70 transition-colors cursor-pointer ${tierMeta.cardBorderClass}`}
+                            >
+                              <pre
+                                className={`font-mono text-[9px] leading-none whitespace-pre ${egg.colorClass}`}
+                              >
+                                {egg.chars}
+                              </pre>
+                            </button>
+                          );
+                        }
+                        return (
+                          <div
+                            key={egg.id}
+                            title={`[${tierMeta.label}] Easter Egg ainda não descoberto`}
+                            className="h-10 px-1.5 border flex flex-col items-center justify-center text-center select-none bg-[#0C0D0C] border-[#1D201D]"
+                          >
+                            <span className="font-mono text-[10px] text-[#454A43]">
+                              ???
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
             </dl>
           </div>
 
           <form
             onSubmit={handleSaveProfile}
-            className="bg-[#141614] border border-[#262A26] p-6 space-y-5"
+            className="relative bg-[#141614] border border-[#262A26] p-6 space-y-5"
           >
+            <RetroEasterEggSlot slot="profile-bio" mode="corner" />
             <h2 className="font-serif text-lg font-medium text-[#F2F2EE]">
               Editar Perfil Público
             </h2>
@@ -1052,6 +1244,12 @@ export function ProfileView({
         </section>
       </div>
 
+      {isDungeonMasterUser(user, profile) && (
+        <DungeonMasterEasterEggCatalog
+          collectedIds={profile?.collectedEasterEggs || []}
+        />
+      )}
+
       {cropSourceUrl && (
         <AvatarCropModal
           imageSrc={cropSourceUrl}
@@ -1073,6 +1271,18 @@ export function ProfileView({
           onClose={() => setShowShareTop5(false)}
         />
       )}
+      <EasterEggDetailModal
+        egg={selectedEgg}
+        onClose={() => setSelectedEgg(null)}
+        onRemove={
+          isDungeonMasterUser(user, profile)
+            ? async (eggId) => {
+                await removeEasterEgg(eggId);
+                setSelectedEgg(null);
+              }
+            : undefined
+        }
+      />
     </main>
   );
 }

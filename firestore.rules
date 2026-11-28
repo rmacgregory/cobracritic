@@ -46,6 +46,16 @@ service cloud.firestore {
       );
     }
 
+    function isDungeonMaster() {
+      return isAdmin() && (
+        request.auth.token.email == 'dungeonmaster@cobracritic.local' ||
+        (
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName.lower() == 'dungeonmaster'
+        )
+      );
+    }
+
     function isApprovedMember() {
       return exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
@@ -114,6 +124,24 @@ service cloud.firestore {
         prefs.liveToasts is bool;
     }
 
+    function isValidCollectedEasterEggs(list) {
+      return list is list &&
+        list.size() <= 50 &&
+        (list.size() == 0 || list[0] is string) &&
+        list.hasOnly([
+          'invader', 'pacman', 'tetris', 'nintendo', 'playstation',
+          'xbox', 'pokeball', 'coin', 'pipe', 'sonic_ring',
+          'pong', 'asteroids', 'atari', 'gameboy', 'snes',
+          'save_floppy', 'heart', 'oneup', 'insert_coin', 'press_start',
+          'portal', 'mgs', 'bonfire', 'iddqd', 'hadouken',
+          'fatality', 'crowbar', 'megaman', 'castlevania', 'metroid',
+          'kirby', 'samus', 'resident', 'silent_hill', 'crash',
+          'spyro', 'dreamcast', 'n64', 'gba', 'memory_card',
+          'triforce', 'missingno', 'chrono', 'ff7_materia', 'sotn',
+          'shadow_colossus', 'earthbound', 'ocarina', 'neogeo', 'golden_cobra'
+        ]);
+    }
+
     // ---------------------------------------------------------
     // Entity Validation Blueprints (Anti-Update-Gap)
     // ---------------------------------------------------------
@@ -124,7 +152,8 @@ service cloud.firestore {
         ]) &&
         data.keys().hasOnly([
           'uid', 'displayName', 'photoURL', 'bio', 'topFiveGames', 'favoriteGenre',
-          'notificationPreferences', 'memberBadge', 'visibility', 'createdAt', 'updatedAt'
+          'notificationPreferences', 'memberBadge', 'collectedEasterEggs', 'konamiUnlocked',
+          'visibility', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.uid) &&
         data.uid == userId &&
@@ -135,6 +164,8 @@ service cloud.firestore {
         (!('favoriteGenre' in data) || (data.favoriteGenre is string && data.favoriteGenre.size() <= 40)) &&
         (!('notificationPreferences' in data) || isValidNotificationPreferences(data.notificationPreferences)) &&
         (!('memberBadge' in data) || (data.memberBadge is string && data.memberBadge in ['cobra', 'guest', 'lango'])) &&
+        (!('collectedEasterEggs' in data) || isValidCollectedEasterEggs(data.collectedEasterEggs)) &&
+        (!('konamiUnlocked' in data) || data.konamiUnlocked is bool) &&
         data.visibility is string && data.visibility == 'group' &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;
@@ -486,6 +517,8 @@ service cloud.firestore {
           (
             userId == request.auth.uid &&
             !('memberBadge' in incoming()) &&
+            !('collectedEasterEggs' in incoming()) &&
+            !('konamiUnlocked' in incoming()) &&
             isVerified() &&
             isNotBanned() &&
             exists(/databases/$(database)/documents/accessRequests/$(userId)) &&
@@ -506,6 +539,27 @@ service cloud.firestore {
               'notificationPreferences', 'updatedAt'
             ]) &&
             canMemberWrite()
+          ) ||
+          (
+            userId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'collectedEasterEggs', 'updatedAt'
+            ]) &&
+            canMemberWrite()
+          ) ||
+          (
+            userId == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'konamiUnlocked', 'updatedAt'
+            ]) &&
+            incoming().konamiUnlocked == true &&
+            canMemberWrite()
+          ) ||
+          (
+            isDungeonMaster() &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'konamiUnlocked', 'updatedAt'
+            ])
           ) ||
           (
             isAdmin() &&

@@ -27,6 +27,7 @@ import {
   resolveAssetUrl,
   type ActiveTab,
 } from '../types';
+import { RetroEasterEggSlot } from './RetroEasterEggs';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -102,7 +103,11 @@ function SidebarFilterCombobox({
   };
 
   return (
-    <div ref={containerRef} className="space-y-2 pt-4 border-t border-[#1F231F]">
+    <div ref={containerRef} className="relative space-y-2 pt-4 border-t border-[#1F231F]">
+      <RetroEasterEggSlot
+        slot={`sidebar-filter-${label.toLowerCase()}`}
+        mode="corner"
+      />
       <div className="px-2 flex items-center justify-between gap-2">
         <p className="text-[11px] font-mono text-[#787D75] flex items-center gap-1.5">
           <Icon className="w-3 h-3 text-[#666B63]" />
@@ -339,7 +344,8 @@ export function Sidebar({
   const sidebarContent = (
     <div className="flex flex-col h-full bg-[#121412] border-r border-[#232723] text-[#F2F2EE]">
       {/* Brand Header with CobraCritic Logo */}
-      <div className="h-16 px-4 border-b border-[#232723] flex items-center justify-between gap-2 shrink-0">
+      <div className="relative h-16 px-4 border-b border-[#232723] flex items-center justify-between gap-2 shrink-0">
+        <RetroEasterEggSlot slot="sidebar-logo" mode="corner" />
         <button
           type="button"
           onClick={() => handleNavClick('home')}
@@ -435,10 +441,15 @@ export function Sidebar({
           icon={Gamepad2}
           onSelect={handlePlatformSelect}
         />
+
+        <div className="relative h-6">
+          <RetroEasterEggSlot slot="sidebar" mode="corner" cornerOverride="br" />
+        </div>
       </div>
 
       {/* Member Footer Card with Quick Logout / Read-Only Login Button */}
-      <div className="p-3 border-t border-[#232723] shrink-0 flex items-center gap-2">
+      <div className="relative p-3 border-t border-[#232723] shrink-0 flex items-center gap-2">
+        <RetroEasterEggSlot slot="sidebar-footer" mode="corner" />
         {user ? (
           <>
             <button

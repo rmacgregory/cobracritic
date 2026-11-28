@@ -23,6 +23,7 @@ import {
 } from '../types';
 import { GameCover } from './GameCover';
 import { MemberAvatar } from './MemberAvatar';
+import { RetroEasterEggSlot } from './RetroEasterEggs';
 import { ReviewCard } from './ReviewCard';
 import { ScoreBadge } from './ScoreBadge';
 
@@ -294,7 +295,8 @@ export function GameDetailView({
       )}
 
       {/* Editorial Game Dossier */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 pb-12 border-b border-[#232723]">
+      <section className="relative grid grid-cols-1 lg:grid-cols-12 gap-10 pb-12 border-b border-[#232723]">
+        <RetroEasterEggSlot slot="game-dossier" mode="corner" />
         <div className="lg:col-span-4 max-w-[280px] lg:max-w-none w-full space-y-3">
           <GameCover
             title={game.title}

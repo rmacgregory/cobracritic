@@ -41,6 +41,14 @@
           "enum": ["cobra", "guest", "lango"],
           "description": "Admin-managed user badge differentiating 'cobra' (Membro dos Cobras), 'guest' (Convidado), and 'lango' (Lango). Defaults to 'cobra' when omitted."
         },
+        "collectedEasterEggs": {
+          "type": "array",
+          "description": "Unique list of hidden classic-game Easter egg IDs collected by this user (max 50: 20 bronze, 20 silver, 10 gold)."
+        },
+        "konamiUnlocked": {
+          "type": "boolean",
+          "description": "Whether the user discovered the secret Konami Code and earned the exclusive secret badge."
+        },
         "visibility": {
           "type": "string",
           "enum": ["group"],

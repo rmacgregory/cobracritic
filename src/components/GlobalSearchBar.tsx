@@ -3,6 +3,7 @@ import { Search, X } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import { getMemberBadgeMeta } from '../types';
 import { GameCover } from './GameCover';
+import { RetroEasterEggSlot } from './RetroEasterEggs';
 import { ScoreBadge } from './ScoreBadge';
 
 interface GlobalSearchBarProps {
@@ -102,6 +103,11 @@ export function GlobalSearchBar({
             <X className="w-3.5 h-3.5" />
           </button>
         )}
+        <RetroEasterEggSlot
+          slot="search-box"
+          mode="corner"
+          cornerOverride={query ? 'bl' : 'br'}
+        />
       </div>
 
       {open && trimmed.length > 0 && (

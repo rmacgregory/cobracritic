@@ -25,6 +25,11 @@ import {
 } from '../types';
 import { GameCover } from './GameCover';
 import { MemberAvatar } from './MemberAvatar';
+import {
+  DungeonMasterEasterEggCatalog,
+  RETRO_EASTER_EGGS,
+  isDungeonMasterUser,
+} from './RetroEasterEggs';
 import { ScoreBadge } from './ScoreBadge';
 
 interface AdminPanelViewProps {
@@ -33,7 +38,7 @@ interface AdminPanelViewProps {
   onSelectMember: (uid: string) => void;
 }
 
-type AdminSection = 'members' | 'games' | 'covers' | 'posts';
+type AdminSection = 'members' | 'games' | 'covers' | 'posts' | 'easter_eggs';
 type MemberFilter = 'all' | 'admins' | 'banned';
 type PostTypeFilter = 'reviews' | 'comments';
 
@@ -44,6 +49,7 @@ export function AdminPanelView({
 }: AdminPanelViewProps) {
   const {
     user,
+    profile,
     isAdmin,
     members,
     membersById,
@@ -169,6 +175,8 @@ export function AdminPanelView({
       );
     });
   }, [comments, postSearch, membersById]);
+
+  const isDungeonMaster = isDungeonMasterUser(user, profile);
 
   if (!isAdmin) {
     return (
@@ -574,6 +582,15 @@ export function AdminPanelView({
               highlight: openCoverReports.length > 0,
             },
             { id: 'posts', label: `Publicações (${reviews.length + comments.length})` },
+            ...(isDungeonMaster
+              ? [
+                  {
+                    id: 'easter_eggs' as const,
+                    label: `Easter Eggs (${RETRO_EASTER_EGGS.length})`,
+                    highlight: true,
+                  },
+                ]
+              : []),
           ] as { id: AdminSection; label: string; highlight?: boolean }[]
         ).map((tab) => (
           <button
@@ -1443,6 +1460,13 @@ export function AdminPanelView({
             </div>
           )}
         </div>
+      )}
+
+      {/* SECTION 5: EXCLUSIVE DUNGEONMASTER EASTER EGGS */}
+      {section === 'easter_eggs' && isDungeonMaster && (
+        <DungeonMasterEasterEggCatalog
+          collectedIds={profile?.collectedEasterEggs || []}
+        />
       )}
     </main>
   );

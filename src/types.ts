@@ -209,6 +209,66 @@ export function getMemberBadgeMeta(badge?: MemberBadge | null) {
   return MEMBER_BADGE_META.cobra;
 }
 
+export type EasterEggTier = 'bronze' | 'silver' | 'gold';
+
+export const EASTER_EGG_IDS = [
+  // 20 Bronze (Comuns)
+  'invader',
+  'pacman',
+  'tetris',
+  'nintendo',
+  'playstation',
+  'xbox',
+  'pokeball',
+  'coin',
+  'pipe',
+  'sonic_ring',
+  'pong',
+  'asteroids',
+  'atari',
+  'gameboy',
+  'snes',
+  'save_floppy',
+  'heart',
+  'oneup',
+  'insert_coin',
+  'press_start',
+  // 20 Prata (Incomuns)
+  'portal',
+  'mgs',
+  'bonfire',
+  'iddqd',
+  'hadouken',
+  'fatality',
+  'crowbar',
+  'megaman',
+  'castlevania',
+  'metroid',
+  'kirby',
+  'samus',
+  'resident',
+  'silent_hill',
+  'crash',
+  'spyro',
+  'dreamcast',
+  'n64',
+  'gba',
+  'memory_card',
+  // 10 Ouro (Raros)
+  'triforce',
+  'missingno',
+  'chrono',
+  'ff7_materia',
+  'sotn',
+  'shadow_colossus',
+  'earthbound',
+  'ocarina',
+  'neogeo',
+  'golden_cobra',
+] as const;
+
+export type EasterEggId = (typeof EASTER_EGG_IDS)[number];
+
 export interface UserProfile {
   uid: string;
   displayName: string;
@@ -218,6 +278,8 @@ export interface UserProfile {
   favoriteGenre?: string;
   notificationPreferences?: NotificationPreferences;
   memberBadge?: MemberBadge;
+  collectedEasterEggs?: string[];
+  konamiUnlocked?: boolean;
   visibility: 'group';
   createdAt?: Timestamp | null;
   updatedAt?: Timestamp | null;

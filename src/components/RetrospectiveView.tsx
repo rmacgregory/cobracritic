@@ -14,6 +14,7 @@ import { useVeredito } from '../context/VereditoContext';
 import { computeWeightedScore, type GameWithStats, type Review } from '../types';
 import { GameCover } from './GameCover';
 import { MemberAvatar } from './MemberAvatar';
+import { RetroEasterEggSlot } from './RetroEasterEggs';
 import { ScoreBadge } from './ScoreBadge';
 import { ShareCardModal } from './ShareCardModal';
 
@@ -210,7 +211,8 @@ export function RetrospectiveView({
   return (
     <main className="max-w-[1140px] mx-auto px-4 sm:px-8 py-8 space-y-8">
       {/* Header + Year Switcher + Share Button */}
-      <header className="border-b border-[#232723] pb-6 flex flex-wrap items-end justify-between gap-4">
+      <header className="relative border-b border-[#232723] pb-6 flex flex-wrap items-end justify-between gap-4">
+        <RetroEasterEggSlot slot="retrospective-header" mode="corner" />
         <div className="space-y-1.5">
           <p className="text-xs font-medium text-[#4ADE80] flex items-center gap-1.5">
             <BarChart3 className="w-3.5 h-3.5" />

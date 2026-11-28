@@ -29,6 +29,7 @@ import {
 import { FeaturedRoundBanner } from './FeaturedRoundBanner';
 import { GameCover } from './GameCover';
 import { MemberAvatar } from './MemberAvatar';
+import { RetroEasterEggSlot } from './RetroEasterEggs';
 import { ScoreBadge } from './ScoreBadge';
 
 interface HomeViewProps {
@@ -459,6 +460,7 @@ export function HomeView({
           onMouseLeave={() => setIsHovered(false)}
           className="relative overflow-hidden bg-[#121512] border border-[#262B26]"
         >
+          <RetroEasterEggSlot slot="home-spotlight" mode="corner" />
           {/* Subtle atmospheric backdrop */}
           {resolvedBackdropUrl && !backdropBroken && (
             <>
@@ -995,8 +997,9 @@ export function HomeView({
       {/* Eventos em Andamento para Votação / Indicações */}
       <section
         aria-label="Eventos em andamento"
-        className="border-b border-[#232723] pb-8 space-y-4"
+        className="relative border-b border-[#232723] pb-8 space-y-4"
       >
+        <RetroEasterEggSlot slot="home-events" mode="corner" />
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="space-y-1">
             <p className="text-xs font-medium text-[#4ADE80] flex items-center gap-1.5">
@@ -1188,8 +1191,9 @@ export function HomeView({
       {/* Jogos em Alta (últimas 48 horas) */}
       <section
         aria-label="Jogos em Alta nas últimas 48 horas"
-        className="border-b border-[#232723] pb-8 space-y-4"
+        className="relative border-b border-[#232723] pb-8 space-y-4"
       >
+        <RetroEasterEggSlot slot="home-trending" mode="corner" />
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="space-y-1">
             <p className="text-xs font-medium text-[#FBBF24] flex items-center gap-1.5">
@@ -1358,6 +1362,10 @@ export function HomeView({
           <ArrowRight className="w-4 h-4 text-[#8C9288] group-hover:text-[#4ADE80] shrink-0 transition-colors" />
         </button>
       </section>
+
+      <div className="relative h-5">
+        <RetroEasterEggSlot slot="home" mode="corner" cornerOverride="br" />
+      </div>
     </main>
   );
 }

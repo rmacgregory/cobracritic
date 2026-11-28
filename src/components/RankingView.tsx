@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Award, BarChart3, Calculator, HelpCircle, Scale, Trophy, X } from 'lucide-react';
 import { useVeredito } from '../context/VereditoContext';
 import { BAYESIAN_WEIGHT_PRIOR, formatReleaseDate, getScoreMeta } from '../types';
+import { RetroEasterEggSlot } from './RetroEasterEggs';
 import { ScoreBadge } from './ScoreBadge';
 
 interface RankingViewProps {
@@ -150,7 +151,8 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
             </p>
           </div>
         ) : (
-          <div className="bg-[#141614] border border-[#262A26] overflow-x-auto">
+          <div className="relative bg-[#141614] border border-[#262A26] overflow-x-auto">
+            <RetroEasterEggSlot slot="ranking-table" mode="corner" />
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-[#262A26] text-xs font-mono text-[#8C9288]">
@@ -243,7 +245,8 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
               divergência de opiniões aparecerá aqui.
             </div>
           ) : (
-            <div className="bg-[#141614] border border-[#262A26] divide-y divide-[#202420]">
+            <div className="relative bg-[#141614] border border-[#262A26] divide-y divide-[#202420]">
+              <RetroEasterEggSlot slot="ranking-divisive" mode="corner" />
               {divisiveGames.map((game) => (
                 <button
                   key={game.id}
@@ -278,7 +281,8 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
               </p>
             </div>
 
-            <div className="bg-[#141614] border border-[#262A26] overflow-x-auto">
+            <div className="relative bg-[#141614] border border-[#262A26] overflow-x-auto">
+              <RetroEasterEggSlot slot="ranking-critics" mode="corner" />
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-[#262A26] text-xs font-mono text-[#8C9288]">
@@ -318,6 +322,10 @@ export function RankingView({ onSelectGame, onSelectMember }: RankingViewProps) 
             </div>
           </section>
         )}
+      </div>
+
+      <div className="relative h-5">
+        <RetroEasterEggSlot slot="ranking" mode="corner" cornerOverride="br" />
       </div>
 
       {showHowItWorks && (
