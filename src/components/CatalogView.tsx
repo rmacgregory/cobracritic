@@ -1,6 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Download,
   LayoutGrid,
   List,
   Plus,
@@ -8,6 +13,7 @@ import {
   Search,
   SlidersHorizontal,
 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useVeredito } from '../context/VereditoContext';
 import {
   GAME_PLAY_STATUS_LIST,
@@ -44,6 +50,208 @@ type SortOption =
 type CatalogViewMode = 'grid' | 'list';
 
 const VIEW_MODE_STORAGE_KEY = 'cobracritic_catalog_view_mode';
+const ROWS_PER_PAGE = 5;
+
+function getGridColumns(): number {
+  if (typeof window === 'undefined') return 6;
+  const width = window.innerWidth;
+  if (width >= 1280) return 6; // xl
+  if (width >= 1024) return 5; // lg
+  if (width >= 768) return 4; // md
+  if (width >= 640) return 3; // sm
+  return 2;
+}
+
+function escapeCsvCell(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  let text = String(value);
+  if (typeof value === 'string' && /^[=+\-@\t\r]/.test(text)) {
+    text = `'${text}`;
+  }
+  if (/[",\r\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function buildCatalogCsv(games: GameWithStats[]): string {
+  const headers = [
+    'Título',
+    'Estúdio',
+    'Data de Lançamento',
+    'Ano',
+    'Gêneros',
+    'Plataformas',
+    'Nota Média Simples',
+    'Índice Ponderado',
+    'Classificação',
+    'Qtd. Avaliações',
+    'Nota Mínima',
+    'Nota Máxima',
+    'Favoráveis',
+    'Mistas',
+    'Desfavoráveis',
+    'Cadastrado por',
+  ];
+
+  const rows = games.map((game) => [
+    game.title,
+    game.developer,
+    game.releaseDate,
+    game.releaseYear,
+    game.genres.join(', '),
+    game.platforms.join(', '),
+    game.averageScore !== null ? game.averageScore : '',
+    game.weightedScore !== null ? game.weightedScore.toFixed(1) : '',
+    getScoreMeta(game.averageScore).label,
+    game.reviewCount,
+    game.minScore !== null ? game.minScore : '',
+    game.maxScore !== null ? game.maxScore : '',
+    game.positiveCount,
+    game.mixedCount,
+    game.negativeCount,
+    game.createdByName,
+  ]);
+
+  return [headers, ...rows]
+    .map((row) => row.map((cell) => escapeCsvCell(cell)).join(','))
+    .join('\r\n');
+}
+
+function getPageItems(currentPage: number, totalPages: number): (number | 'ellipsis')[] {
+  if (totalPages <= 5) {
+    return Array.from({ length: totalPages }, (_, idx) => idx + 1);
+  }
+  const pages: (number | 'ellipsis')[] = [1];
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) pages.push('ellipsis');
+  for (let p = start; p <= end; p += 1) {
+    pages.push(p);
+  }
+  if (end < totalPages - 1) pages.push('ellipsis');
+  pages.push(totalPages);
+  return pages;
+}
+
+interface CatalogPaginationProps {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  startItem: number;
+  endItem: number;
+  onPageChange: (page: number) => void;
+}
+
+function CatalogPagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  startItem,
+  endItem,
+  onPageChange,
+}: CatalogPaginationProps) {
+  const pageItems = getPageItems(currentPage, totalPages);
+
+  return (
+    <nav
+      aria-label="Paginação do catálogo"
+      className="bg-[#141614] border border-[#262A26] px-4 py-3 flex flex-wrap items-center justify-between gap-3"
+    >
+      <p className="text-xs text-[#8C9288] tabular-nums">
+        Mostrando{' '}
+        <strong className="text-[#F2F2EE] font-mono">
+          {startItem}–{endItem}
+        </strong>{' '}
+        de <strong className="text-[#F2F2EE] font-mono">{totalItems}</strong>{' '}
+        {totalItems === 1 ? 'jogo' : 'jogos'}
+      </p>
+
+      {totalPages > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {currentPage >= 2 && (
+            <button
+              type="button"
+              onClick={() => onPageChange(1)}
+              aria-label="Voltar para a primeira página"
+              title="Primeira página"
+              className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-[#2A2F2A] bg-[#0C0D0C] text-[#C8CBC4] hover:text-[#F2F2EE] hover:border-[#4ADE80]/60 transition-colors cursor-pointer"
+            >
+              <ChevronsLeft className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Primeira</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            disabled={currentPage <= 1}
+            onClick={() => onPageChange(currentPage - 1)}
+            aria-label="Página anterior"
+            title="Página anterior"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-[#2A2F2A] bg-[#0C0D0C] text-[#C8CBC4] hover:text-[#F2F2EE] hover:border-[#4ADE80]/60 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Anterior</span>
+          </button>
+
+          <div className="flex items-center gap-1">
+            {pageItems.map((item, idx) =>
+              item === 'ellipsis' ? (
+                <span
+                  key={`ellipsis-${idx}`}
+                  className="px-1.5 text-xs font-mono text-[#6E736B] select-none"
+                  aria-hidden="true"
+                >
+                  …
+                </span>
+              ) : (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => onPageChange(item)}
+                  aria-label={`Página ${item}`}
+                  aria-current={item === currentPage ? 'page' : undefined}
+                  className={`min-w-[30px] h-[30px] px-2 text-xs font-mono font-medium rounded-md border transition-colors tabular-nums cursor-pointer ${
+                    item === currentPage
+                      ? 'bg-[#4ADE80] border-[#4ADE80] text-[#0C0D0C] font-semibold'
+                      : 'bg-[#0C0D0C] border-[#2A2F2A] text-[#A8ACA5] hover:text-[#F2F2EE] hover:border-[#495249]'
+                  }`}
+                >
+                  {item}
+                </button>
+              ),
+            )}
+          </div>
+
+          <button
+            type="button"
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange(currentPage + 1)}
+            aria-label="Próxima página"
+            title="Próxima página"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-md border border-[#2A2F2A] bg-[#0C0D0C] text-[#C8CBC4] hover:text-[#F2F2EE] hover:border-[#4ADE80]/60 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+          >
+            <span className="hidden sm:inline">Próxima</span>
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            type="button"
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange(totalPages)}
+            aria-label="Ir para a última página"
+            title="Última página"
+            className="inline-flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-[#2A2F2A] bg-[#0C0D0C] text-[#C8CBC4] hover:text-[#F2F2EE] hover:border-[#4ADE80]/60 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+          >
+            <span className="hidden md:inline">Última</span>
+            <ChevronsRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+    </nav>
+  );
+}
 
 export function CatalogView({
   selectedPlatform,
@@ -80,6 +288,19 @@ export function CatalogView({
       return 'grid';
     }
   });
+  const [gridColumns, setGridColumns] = useState<number>(() => getGridColumns());
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageDirection, setPageDirection] = useState<1 | -1>(1);
+  const [csvExported, setCsvExported] = useState(false);
+  const catalogTopRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setGridColumns(getGridColumns());
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleChangeViewMode = (mode: CatalogViewMode) => {
     setViewMode(mode);
@@ -185,6 +406,53 @@ export function CatalogView({
     sortBy,
   ]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    search,
+    selectedPlatform,
+    selectedGenre,
+    selectedYear,
+    selectedStatus,
+    dateFrom,
+    dateTo,
+    sortBy,
+    viewMode,
+  ]);
+
+  const itemsPerPage =
+    viewMode === 'list' ? ROWS_PER_PAGE : gridColumns * ROWS_PER_PAGE;
+
+  const totalPages = Math.max(1, Math.ceil(filteredGames.length / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedGames = useMemo(() => {
+    const startIdx = (safePage - 1) * itemsPerPage;
+    return filteredGames.slice(startIdx, startIdx + itemsPerPage);
+  }, [filteredGames, safePage, itemsPerPage]);
+
+  const startItem =
+    filteredGames.length === 0 ? 0 : (safePage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(safePage * itemsPerPage, filteredGames.length);
+
+  const handlePageChange = (nextPage: number) => {
+    const clamped = Math.min(Math.max(1, nextPage), totalPages);
+    if (clamped === safePage) return;
+    setPageDirection(clamped > safePage ? 1 : -1);
+    setCurrentPage(clamped);
+    if (catalogTopRef.current) {
+      catalogTopRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   const hasActiveFilters = Boolean(
     search.trim() ||
       selectedPlatform !== 'all' ||
@@ -213,6 +481,56 @@ export function CatalogView({
     } finally {
       setSeeding(false);
     }
+  };
+
+  const handleExportCsv = () => {
+    if (gamesWithStats.length === 0) return;
+    const sortedAll = [...gamesWithStats].sort((a, b) => {
+      switch (sortBy) {
+        case 'score_desc': {
+          const weightA = a.weightedScore ?? -1;
+          const weightB = b.weightedScore ?? -1;
+          if (weightB !== weightA) return weightB - weightA;
+          if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount;
+          return (b.averageScore ?? -1) - (a.averageScore ?? -1);
+        }
+        case 'avg_desc': {
+          const scoreA = a.averageScore ?? -1;
+          const scoreB = b.averageScore ?? -1;
+          if (scoreB !== scoreA) return scoreB - scoreA;
+          if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount;
+          return b.releaseDate.localeCompare(a.releaseDate);
+        }
+        case 'release_desc':
+          return b.releaseDate.localeCompare(a.releaseDate);
+        case 'release_asc':
+          return a.releaseDate.localeCompare(b.releaseDate);
+        case 'reviews_desc':
+          if (b.reviewCount !== a.reviewCount) return b.reviewCount - a.reviewCount;
+          return (b.averageScore ?? -1) - (a.averageScore ?? -1);
+        case 'title_asc':
+          return a.title.localeCompare(b.title, 'pt-BR');
+        default:
+          return 0;
+      }
+    });
+
+    const csv = buildCatalogCsv(sortedAll);
+    const blob = new Blob([`\uFEFF${csv}`], {
+      type: 'text/csv;charset=utf-8;',
+    });
+    const url = URL.createObjectURL(blob);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `cobracritic-catalogo-${dateStamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    setCsvExported(true);
+    window.setTimeout(() => setCsvExported(false), 2500);
   };
 
   if (dataLoading) {
@@ -326,6 +644,16 @@ export function CatalogView({
                 <span>Lista</span>
               </button>
             </div>
+
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              title={`Exportar todos os ${gamesWithStats.length} jogos cadastrados em CSV`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-[#141614] border border-[#262A26] text-[#F2F2EE] rounded-md hover:border-[#4ADE80]/60 hover:text-[#4ADE80] transition-colors cursor-pointer"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>{csvExported ? 'CSV exportado!' : 'Exportar CSV'}</span>
+            </button>
 
             {reviews.length > 0 && (
               <button
@@ -512,7 +840,7 @@ export function CatalogView({
           )}
         </div>
 
-        {/* Games Grid */}
+        {/* Games Grid / List with 5-row Pagination */}
         {filteredGames.length === 0 ? (
           <div className="border border-[#262A26] bg-[#141614] px-6 py-12 text-center space-y-3">
             <p className="font-serif text-xl text-[#F2F2EE]">
@@ -541,148 +869,180 @@ export function CatalogView({
               )}
             </div>
           </div>
-        ) : viewMode === 'list' ? (
-          <div className="border border-[#262A26] bg-[#141614] divide-y divide-[#222622]">
-            <div className="hidden sm:grid sm:grid-cols-12 items-center gap-3 px-4 py-2 bg-[#101210] text-[11px] font-mono uppercase tracking-wider text-[#787D75]">
-              <span className="col-span-1">Nota</span>
-              <span className={user ? 'col-span-6' : 'col-span-7'}>Jogo</span>
-              <span className="col-span-4">Plataformas</span>
-              {user && <span className="col-span-1 text-right">Ação</span>}
-            </div>
-            {filteredGames.map((game) => (
-              <div
-                key={game.id}
-                className="flex sm:grid sm:grid-cols-12 items-center gap-3 px-4 py-2.5 hover:bg-[#191D19] transition-colors"
+        ) : (
+          <div ref={catalogTopRef} className="space-y-6 scroll-mt-20">
+            <CatalogPagination
+              currentPage={safePage}
+              totalPages={totalPages}
+              totalItems={filteredGames.length}
+              startItem={startItem}
+              endItem={endItem}
+              onPageChange={handlePageChange}
+            />
+
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={`catalog-page-${viewMode}-${safePage}-${itemsPerPage}-${selectedPlatform}-${selectedGenre}-${selectedYear}-${selectedStatus}-${sortBy}-${search.trim()}`}
+                initial={{ opacity: 0, y: pageDirection >= 0 ? 14 : -14 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: pageDirection >= 0 ? -10 : 10 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               >
-                <div className="sm:col-span-1 shrink-0">
-                  <ScoreBadge score={game.averageScore} size="xs" />
-                </div>
+                {viewMode === 'list' ? (
+                  <div className="border border-[#262A26] bg-[#141614] divide-y divide-[#222622]">
+                    <div className="hidden sm:grid sm:grid-cols-12 items-center gap-3 px-4 py-2 bg-[#101210] text-[11px] font-mono uppercase tracking-wider text-[#787D75]">
+                      <span className="col-span-1">Nota</span>
+                      <span className={user ? 'col-span-6' : 'col-span-7'}>Jogo</span>
+                      <span className="col-span-4">Plataformas</span>
+                      {user && <span className="col-span-1 text-right">Ação</span>}
+                    </div>
+                    {paginatedGames.map((game) => (
+                      <div
+                        key={game.id}
+                        className="flex sm:grid sm:grid-cols-12 items-center gap-3 px-4 py-2.5 hover:bg-[#191D19] transition-colors"
+                      >
+                        <div className="sm:col-span-1 shrink-0">
+                          <ScoreBadge score={game.averageScore} size="xs" />
+                        </div>
 
-                <div
-                  className={`min-w-0 flex-1 ${
-                    user ? 'sm:col-span-6' : 'sm:col-span-7'
-                  } flex items-center gap-2`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onSelectGame(game.id)}
-                    className="font-display text-sm font-semibold text-[#F2F2EE] hover:text-[#4ADE80] transition-colors truncate text-left cursor-pointer"
-                  >
-                    {game.title}
-                  </button>
-                  <span className="hidden md:inline text-[11px] font-mono text-[#6E736B] tabular-nums shrink-0">
-                    {game.releaseYear}
-                  </span>
-                  {myStatusByGame[game.id] && (
-                    <span
-                      className={`text-[11px] font-medium shrink-0 ${
-                        GAME_PLAY_STATUS_META[myStatusByGame[game.id]].colorClass
-                      }`}
-                    >
-                      · {GAME_PLAY_STATUS_META[myStatusByGame[game.id]].shortLabel}
-                    </span>
-                  )}
-                </div>
+                        <div
+                          className={`min-w-0 flex-1 ${
+                            user ? 'sm:col-span-6' : 'sm:col-span-7'
+                          } flex items-center gap-2`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => onSelectGame(game.id)}
+                            className="font-display text-sm font-semibold text-[#F2F2EE] hover:text-[#4ADE80] transition-colors truncate text-left cursor-pointer"
+                          >
+                            {game.title}
+                          </button>
+                          <span className="hidden md:inline text-[11px] font-mono text-[#6E736B] tabular-nums shrink-0">
+                            {game.releaseYear}
+                          </span>
+                          {myStatusByGame[game.id] && (
+                            <span
+                              className={`text-[11px] font-medium shrink-0 ${
+                                GAME_PLAY_STATUS_META[myStatusByGame[game.id]].colorClass
+                              }`}
+                            >
+                              · {GAME_PLAY_STATUS_META[myStatusByGame[game.id]].shortLabel}
+                            </span>
+                          )}
+                        </div>
 
-                <p
-                  title={game.platforms.join(' · ')}
-                  className="text-xs text-[#8C9288] truncate max-w-[34%] sm:max-w-none sm:col-span-4"
-                >
-                  {game.platforms.join(' · ')}
-                </p>
+                        <p
+                          title={game.platforms.join(' · ')}
+                          className="text-xs text-[#8C9288] truncate max-w-[34%] sm:max-w-none sm:col-span-4"
+                        >
+                          {game.platforms.join(' · ')}
+                        </p>
 
-                {user && (
-                  <div className="sm:col-span-1 flex justify-end shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => onOpenReview(game)}
-                      className="text-xs font-medium text-[#A8ACA5] hover:text-[#4ADE80] transition-colors whitespace-nowrap cursor-pointer"
-                    >
-                      Avaliar
-                    </button>
+                        {user && (
+                          <div className="sm:col-span-1 flex justify-end shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => onOpenReview(game)}
+                              className="text-xs font-medium text-[#A8ACA5] hover:text-[#4ADE80] transition-colors whitespace-nowrap cursor-pointer"
+                            >
+                              Avaliar
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-7">
+                    {paginatedGames.map((game) => {
+                      const scoreMeta = getScoreMeta(game.averageScore);
+                      return (
+                        <article
+                          key={game.id}
+                          className="group flex flex-col justify-between space-y-2.5 transition-transform duration-300 ease-out hover:scale-[1.03] will-change-transform motion-reduce:transform-none"
+                        >
+                          <div className="space-y-2">
+                            <button
+                              type="button"
+                              onClick={() => onSelectGame(game.id)}
+                              className="block w-full text-left cursor-pointer"
+                            >
+                              <GameCover
+                                title={game.title}
+                                developer={game.developer}
+                                releaseYear={game.releaseYear}
+                                coverUrl={game.coverUrl}
+                                compact
+                                className="transition-all duration-300 ease-out group-hover:border-[#3A433A] group-hover:shadow-[0_12px_28px_-14px_rgba(0,0,0,0.85)]"
+                              />
+                            </button>
+
+                            <div className="flex items-start justify-between gap-2 pt-0.5">
+                              <div className="min-w-0">
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectGame(game.id)}
+                                  className="font-display text-sm font-semibold text-[#F2F2EE] leading-snug group-hover:text-[#4ADE80] transition-colors text-left cursor-pointer line-clamp-2"
+                                >
+                                  {game.title}
+                                </button>
+                                <p className="text-[11px] text-[#90968C] mt-0.5 truncate">
+                                  {game.developer} · {game.releaseYear}
+                                </p>
+                              </div>
+                              <ScoreBadge score={game.averageScore} size="xs" />
+                            </div>
+
+                            <div className="space-y-0.5 text-[11px] text-[#8C9288]">
+                              <p className="truncate">{game.platforms.join(' · ')}</p>
+                              <p className="truncate text-[#6E736B]">
+                                {game.genres.join(' / ')}
+                                {myStatusByGame[game.id] && (
+                                  <span
+                                    className={`font-medium ${
+                                      GAME_PLAY_STATUS_META[myStatusByGame[game.id]].colorClass
+                                    }`}
+                                  >
+                                    {' · '}
+                                    {GAME_PLAY_STATUS_META[myStatusByGame[game.id]].shortLabel}
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="pt-2 border-t border-[#222622] flex items-center justify-between gap-2 text-[11px]">
+                            <span className={`font-medium truncate ${scoreMeta.accentTextClass}`}>
+                              {game.reviewCount === 0
+                                ? 'Sem notas'
+                                : `${scoreMeta.shortLabel} · ${game.reviewCount}`}
+                            </span>
+                            {user && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenReview(game)}
+                                className="font-medium text-[#F2F2EE] hover:text-[#4ADE80] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+                              >
+                                Avaliar
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
                   </div>
                 )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-x-4 gap-y-7">
-            {filteredGames.map((game) => {
-              const scoreMeta = getScoreMeta(game.averageScore);
-              return (
-                <article
-                  key={game.id}
-                  className="group flex flex-col justify-between space-y-2.5 transition-transform duration-300 ease-out hover:scale-[1.03] will-change-transform motion-reduce:transform-none"
-                >
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => onSelectGame(game.id)}
-                      className="block w-full text-left cursor-pointer"
-                    >
-                      <GameCover
-                        title={game.title}
-                        developer={game.developer}
-                        releaseYear={game.releaseYear}
-                        coverUrl={game.coverUrl}
-                        compact
-                        className="transition-all duration-300 ease-out group-hover:border-[#3A433A] group-hover:shadow-[0_12px_28px_-14px_rgba(0,0,0,0.85)]"
-                      />
-                    </button>
+              </motion.div>
+            </AnimatePresence>
 
-                    <div className="flex items-start justify-between gap-2 pt-0.5">
-                      <div className="min-w-0">
-                        <button
-                          type="button"
-                          onClick={() => onSelectGame(game.id)}
-                          className="font-display text-sm font-semibold text-[#F2F2EE] leading-snug group-hover:text-[#4ADE80] transition-colors text-left cursor-pointer line-clamp-2"
-                        >
-                          {game.title}
-                        </button>
-                        <p className="text-[11px] text-[#90968C] mt-0.5 truncate">
-                          {game.developer} · {game.releaseYear}
-                        </p>
-                      </div>
-                      <ScoreBadge score={game.averageScore} size="xs" />
-                    </div>
-
-                    <div className="space-y-0.5 text-[11px] text-[#8C9288]">
-                      <p className="truncate">{game.platforms.join(' · ')}</p>
-                      <p className="truncate text-[#6E736B]">
-                        {game.genres.join(' / ')}
-                        {myStatusByGame[game.id] && (
-                          <span
-                            className={`font-medium ${
-                              GAME_PLAY_STATUS_META[myStatusByGame[game.id]].colorClass
-                            }`}
-                          >
-                            {' · '}
-                            {GAME_PLAY_STATUS_META[myStatusByGame[game.id]].shortLabel}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="pt-2 border-t border-[#222622] flex items-center justify-between gap-2 text-[11px]">
-                    <span className={`font-medium truncate ${scoreMeta.accentTextClass}`}>
-                      {game.reviewCount === 0
-                        ? 'Sem notas'
-                        : `${scoreMeta.shortLabel} · ${game.reviewCount}`}
-                    </span>
-                    {user && (
-                      <button
-                        type="button"
-                        onClick={() => onOpenReview(game)}
-                        className="font-medium text-[#F2F2EE] hover:text-[#4ADE80] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                      >
-                        Avaliar
-                      </button>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
+            <CatalogPagination
+              currentPage={safePage}
+              totalPages={totalPages}
+              totalItems={filteredGames.length}
+              startItem={startItem}
+              endItem={endItem}
+              onPageChange={handlePageChange}
+            />
           </div>
         )}
       </section>

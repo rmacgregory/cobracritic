@@ -8,6 +8,7 @@ import React, {
   useState,
 } from 'react';
 import { Crown, KeyRound, RotateCcw, Search, Sparkles, Trash2, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import type { User } from 'firebase/auth';
 import { useVeredito } from '../context/VereditoContext';
 import type {
@@ -58,6 +59,35 @@ export const EASTER_EGG_TIER_META: Record<
     chanceHint: 'Raro (8%)',
     pillClass: 'text-[#FDE68A] bg-[#261E0F] border-[#9A7422]',
     cardBorderClass: 'border-[#66511D]',
+  },
+};
+
+const EASTER_EGG_GLOW_STYLE: Record<
+  EasterEggTier,
+  {
+    haloBg: string;
+    ringBorder: string;
+    toastShadow: string;
+    auraClass: string;
+  }
+> = {
+  bronze: {
+    haloBg: 'radial-gradient(circle, rgba(251,146,60,0.48) 0%, rgba(74,222,128,0.22) 48%, rgba(0,0,0,0) 75%)',
+    ringBorder: 'rgba(253,186,116,0.6)',
+    toastShadow: '0 0 32px -6px rgba(251,146,60,0.38), 0 20px 25px -5px rgba(0,0,0,0.65)',
+    auraClass: 'bg-[#FB923C]/20',
+  },
+  silver: {
+    haloBg: 'radial-gradient(circle, rgba(147,197,253,0.48) 0%, rgba(226,232,240,0.22) 48%, rgba(0,0,0,0) 75%)',
+    ringBorder: 'rgba(191,219,254,0.65)',
+    toastShadow: '0 0 32px -6px rgba(147,197,253,0.4), 0 20px 25px -5px rgba(0,0,0,0.65)',
+    auraClass: 'bg-[#93C5FD]/20',
+  },
+  gold: {
+    haloBg: 'radial-gradient(circle, rgba(250,204,21,0.58) 0%, rgba(253,230,138,0.26) 48%, rgba(0,0,0,0) 75%)',
+    ringBorder: 'rgba(253,224,71,0.75)',
+    toastShadow: '0 0 38px -4px rgba(250,204,21,0.48), 0 20px 25px -5px rgba(0,0,0,0.65)',
+    auraClass: 'bg-[#FACC15]/25',
   },
 };
 
@@ -666,6 +696,13 @@ interface EggToastState {
   readOnly: boolean;
 }
 
+interface EggCollectBurst {
+  id: number;
+  x: number;
+  y: number;
+  egg: RetroEasterEgg;
+}
+
 interface ActiveSpawn {
   slot: string;
   egg: RetroEasterEgg;
@@ -675,7 +712,10 @@ interface ActiveSpawn {
 interface EasterEggContextValue {
   activeSpawn: ActiveSpawn | null;
   registerSlot: (slot: string) => () => void;
-  triggerEggClick: (egg: RetroEasterEgg) => Promise<void>;
+  triggerEggClick: (
+    egg: RetroEasterEgg,
+    origin?: { x: number; y: number },
+  ) => Promise<void>;
 }
 
 const EasterEggContext = createContext<EasterEggContextValue>({
@@ -725,12 +765,14 @@ export function EasterEggProvider({
 
   const [activeSpawn, setActiveSpawn] = useState<ActiveSpawn | null>(null);
   const [eggToast, setEggToast] = useState<EggToastState | null>(null);
+  const [collectBurst, setCollectBurst] = useState<EggCollectBurst | null>(null);
   const [konamiModalOpen, setKonamiModalOpen] = useState(false);
   const [konamiNewlyUnlocked, setKonamiNewlyUnlocked] = useState(false);
 
   const registeredSlotsRef = useRef<Set<string>>(new Set());
   const collectedIdsRef = useRef<Set<string>>(new Set());
   const toastTimerRef = useRef<number | null>(null);
+  const burstTimerRef = useRef<number | null>(null);
   const konamiIndexRef = useRef<number>(0);
 
   const collectedIds = useMemo(
@@ -843,13 +885,31 @@ export function EasterEggProvider({
       if (toastTimerRef.current !== null) {
         window.clearTimeout(toastTimerRef.current);
       }
+      if (burstTimerRef.current !== null) {
+        window.clearTimeout(burstTimerRef.current);
+      }
     };
   }, []);
 
   const triggerEggClick = useCallback(
-    async (egg: RetroEasterEgg) => {
+    async (egg: RetroEasterEgg, origin?: { x: number; y: number }) => {
       playRetroChime(egg.tier === 'gold' ? 'gold' : 'egg');
       setActiveSpawn(null);
+
+      if (origin && typeof window !== 'undefined') {
+        setCollectBurst({
+          id: Date.now(),
+          x: origin.x,
+          y: origin.y,
+          egg,
+        });
+        if (burstTimerRef.current !== null) {
+          window.clearTimeout(burstTimerRef.current);
+        }
+        burstTimerRef.current = window.setTimeout(() => {
+          setCollectBurst(null);
+        }, 950);
+      }
 
       let newlyCollected = false;
       let totalCount = collectedIdsRef.current.size;
@@ -884,70 +944,139 @@ export function EasterEggProvider({
     >
       {children}
 
-      {/* Discreet Retro Collection Toast */}
-      {eggToast && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-5 right-5 z-50 max-w-sm bg-[#121512] border border-[#2D382D] shadow-2xl px-4 py-3.5 text-[#F2F2EE]"
-        >
-          <div className="flex items-start gap-3">
-            <pre
-              aria-hidden="true"
-              className={`font-mono text-xs leading-tight whitespace-pre shrink-0 pt-0.5 select-none ${eggToast.egg.colorClass}`}
+      {/* Soft Click Glow Burst when collecting an Easter Egg */}
+      <AnimatePresence>
+        {collectBurst && (
+          <div
+            key={collectBurst.id}
+            aria-hidden="true"
+            style={{ left: collectBurst.x, top: collectBurst.y }}
+            className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-1/2"
+          >
+            <motion.div
+              initial={{ scale: 0.35, opacity: 0 }}
+              animate={{ scale: [0.35, 1.35, 1.9], opacity: [0, 0.9, 0] }}
+              transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
+              style={{
+                background: EASTER_EGG_GLOW_STYLE[collectBurst.egg.tier].haloBg,
+              }}
+              className="w-24 h-24 rounded-full blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0.75 }}
+              animate={{ scale: 2.1, opacity: 0 }}
+              transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+              style={{
+                borderColor:
+                  EASTER_EGG_GLOW_STYLE[collectBurst.egg.tier].ringBorder,
+              }}
+              className="absolute inset-4 rounded-full border"
+            />
+            <motion.pre
+              initial={{ scale: 0.9, y: 0, opacity: 1 }}
+              animate={{ scale: 1.25, y: -18, opacity: 0 }}
+              transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
+              className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-mono text-[10px] leading-none whitespace-pre select-none drop-shadow-[0_0_8px_rgba(255,255,255,0.65)] ${collectBurst.egg.colorClass}`}
             >
-              {eggToast.egg.chars}
-            </pre>
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <p className="text-[11px] font-mono uppercase tracking-wider text-[#4ADE80] truncate">
-                    {eggToast.readOnly
-                      ? 'Segredo Encontrado!'
-                      : eggToast.newlyCollected
-                        ? `Coletado (${eggToast.totalCount}/${RETRO_EASTER_EGGS.length})`
-                        : `Já Coletado (${eggToast.totalCount}/${RETRO_EASTER_EGGS.length})`}
-                  </p>
-                  <span
-                    className={`text-[10px] font-mono px-1.5 py-0.2 border rounded shrink-0 ${EASTER_EGG_TIER_META[eggToast.egg.tier].pillClass}`}
-                  >
-                    {EASTER_EGG_TIER_META[eggToast.egg.tier].label}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setEggToast(null)}
-                  aria-label="Fechar aviso"
-                  className="text-[#787D75] hover:text-[#F2F2EE] cursor-pointer shrink-0"
+              {collectBurst.egg.chars}
+            </motion.pre>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Discreet Retro Collection Toast with Soft Glow */}
+      <AnimatePresence>
+        {eggToast && (
+          <motion.div
+            key={`${eggToast.egg.id}-${eggToast.totalCount}`}
+            role="status"
+            aria-live="polite"
+            initial={{ opacity: 0, y: 14, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 10, scale: 0.97 }}
+            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              boxShadow: EASTER_EGG_GLOW_STYLE[eggToast.egg.tier].toastShadow,
+            }}
+            className="fixed bottom-5 right-5 z-50 max-w-sm bg-[#121512] border border-[#354435] px-4 py-3.5 text-[#F2F2EE] overflow-hidden"
+          >
+            <motion.div
+              aria-hidden="true"
+              initial={{ opacity: 0.75 }}
+              animate={{ opacity: [0.75, 0.25, 0.45, 0.15] }}
+              transition={{ duration: 1.8, ease: 'easeOut' }}
+              style={{
+                background: EASTER_EGG_GLOW_STYLE[eggToast.egg.tier].haloBg,
+              }}
+              className="pointer-events-none absolute -left-8 -top-8 w-36 h-36 rounded-full blur-xl"
+            />
+            <div className="relative flex items-start gap-3">
+              <div className="relative shrink-0 pt-0.5">
+                <motion.div
+                  aria-hidden="true"
+                  initial={{ scale: 0.8, opacity: 0.85 }}
+                  animate={{ scale: [0.85, 1.25, 1], opacity: [0.85, 0.45, 0.25] }}
+                  transition={{ duration: 1.4, ease: 'easeOut' }}
+                  className={`pointer-events-none absolute -inset-2 rounded-full blur-md ${EASTER_EGG_GLOW_STYLE[eggToast.egg.tier].auraClass}`}
+                />
+                <pre
+                  aria-hidden="true"
+                  className={`relative font-mono text-xs leading-tight whitespace-pre select-none ${eggToast.egg.colorClass}`}
                 >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                  {eggToast.egg.chars}
+                </pre>
               </div>
-              <p className="text-xs font-semibold text-[#F2F2EE]">
-                {eggToast.egg.name}{' '}
-                <span className="font-normal text-[#8C9288]">
-                  · {eggToast.egg.game}
-                </span>
-              </p>
-              <p className="text-xs text-[#C7CBC4] italic">
-                &ldquo;{eggToast.egg.quote}&rdquo;
-              </p>
-              {!eggToast.readOnly &&
-                eggToast.newlyCollected &&
-                eggToast.totalCount >= RETRO_EASTER_EGGS.length && (
-                  <p className="text-[11px] font-mono text-[#FDE68A] pt-0.5">
-                    50/50 completo! Badge Caçador Supremo desbloqueado no perfil.
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <p className="text-[11px] font-mono uppercase tracking-wider text-[#4ADE80] truncate">
+                      {eggToast.readOnly
+                        ? 'Segredo Encontrado!'
+                        : eggToast.newlyCollected
+                          ? `Coletado (${eggToast.totalCount}/${RETRO_EASTER_EGGS.length})`
+                          : `Já Coletado (${eggToast.totalCount}/${RETRO_EASTER_EGGS.length})`}
+                    </p>
+                    <span
+                      className={`text-[10px] font-mono px-1.5 py-0.2 border rounded shrink-0 ${EASTER_EGG_TIER_META[eggToast.egg.tier].pillClass}`}
+                    >
+                      {EASTER_EGG_TIER_META[eggToast.egg.tier].label}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEggToast(null)}
+                    aria-label="Fechar aviso"
+                    className="text-[#787D75] hover:text-[#F2F2EE] cursor-pointer shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-xs font-semibold text-[#F2F2EE]">
+                  {eggToast.egg.name}{' '}
+                  <span className="font-normal text-[#8C9288]">
+                    · {eggToast.egg.game}
+                  </span>
+                </p>
+                <p className="text-xs text-[#C7CBC4] italic">
+                  &ldquo;{eggToast.egg.quote}&rdquo;
+                </p>
+                {!eggToast.readOnly &&
+                  eggToast.newlyCollected &&
+                  eggToast.totalCount >= RETRO_EASTER_EGGS.length && (
+                    <p className="text-[11px] font-mono text-[#FDE68A] pt-0.5">
+                      50/50 completo! Badge Caçador Supremo desbloqueado no perfil.
+                    </p>
+                  )}
+                {eggToast.readOnly && (
+                  <p className="text-[11px] text-[#8C9288]">
+                    Entre com sua conta para salvar a coleção no perfil.
                   </p>
                 )}
-              {eggToast.readOnly && (
-                <p className="text-[11px] text-[#8C9288]">
-                  Entre com sua conta para salvar a coleção no perfil.
-                </p>
-              )}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Secret Konami Code Modal */}
       {konamiModalOpen && (
@@ -1061,7 +1190,12 @@ export function RetroEasterEggSlot({
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        void triggerEggClick(egg);
+        const rect = e.currentTarget.getBoundingClientRect();
+        const origin = {
+          x: rect.left + rect.width / 2 || e.clientX,
+          y: rect.top + rect.height / 2 || e.clientY,
+        };
+        void triggerEggClick(egg, origin);
       }}
       title={egg.name}
       aria-label={`Easter egg secreto: ${egg.name}`}
