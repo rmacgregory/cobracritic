@@ -760,11 +760,20 @@ export function EasterEggProvider({
   selectedMemberId,
   children,
 }: EasterEggProviderProps) {
-  const { user, profile, readOnlyMode, collectEasterEgg, unlockKonamiSecret } =
-    useVeredito();
+  const {
+    user,
+    profile,
+    readOnlyMode,
+    collectEasterEgg,
+    removeEasterEgg,
+    unlockKonamiSecret,
+  } = useVeredito();
 
   const [activeSpawn, setActiveSpawn] = useState<ActiveSpawn | null>(null);
   const [eggToast, setEggToast] = useState<EggToastState | null>(null);
+  const [toastDetailEgg, setToastDetailEgg] = useState<RetroEasterEgg | null>(
+    null,
+  );
   const [collectBurst, setCollectBurst] = useState<EggCollectBurst | null>(null);
   const [konamiModalOpen, setKonamiModalOpen] = useState(false);
   const [konamiNewlyUnlocked, setKonamiNewlyUnlocked] = useState(false);
@@ -984,7 +993,7 @@ export function EasterEggProvider({
         )}
       </AnimatePresence>
 
-      {/* Discreet Retro Collection Toast with Soft Glow */}
+      {/* Discreet Retro Collection Toast with Soft Glow (clickable for details) */}
       <AnimatePresence>
         {eggToast && (
           <motion.div
@@ -998,7 +1007,7 @@ export function EasterEggProvider({
             style={{
               boxShadow: EASTER_EGG_GLOW_STYLE[eggToast.egg.tier].toastShadow,
             }}
-            className="fixed bottom-5 right-5 z-50 max-w-sm bg-[#121512] border border-[#354435] px-4 py-3.5 text-[#F2F2EE] overflow-hidden"
+            className="fixed bottom-5 right-5 z-50 max-w-sm bg-[#121512] border border-[#354435] hover:border-[#4ADE80]/70 transition-colors text-[#F2F2EE] overflow-hidden"
           >
             <motion.div
               aria-hidden="true"
@@ -1010,24 +1019,36 @@ export function EasterEggProvider({
               }}
               className="pointer-events-none absolute -left-8 -top-8 w-36 h-36 rounded-full blur-xl"
             />
-            <div className="relative flex items-start gap-3">
-              <div className="relative shrink-0 pt-0.5">
-                <motion.div
-                  aria-hidden="true"
-                  initial={{ scale: 0.8, opacity: 0.85 }}
-                  animate={{ scale: [0.85, 1.25, 1], opacity: [0.85, 0.45, 0.25] }}
-                  transition={{ duration: 1.4, ease: 'easeOut' }}
-                  className={`pointer-events-none absolute -inset-2 rounded-full blur-md ${EASTER_EGG_GLOW_STYLE[eggToast.egg.tier].auraClass}`}
-                />
-                <pre
-                  aria-hidden="true"
-                  className={`relative font-mono text-xs leading-tight whitespace-pre select-none ${eggToast.egg.colorClass}`}
-                >
-                  {eggToast.egg.chars}
-                </pre>
-              </div>
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setToastDetailEgg(eggToast.egg);
+                setEggToast(null);
+                if (toastTimerRef.current !== null) {
+                  window.clearTimeout(toastTimerRef.current);
+                  toastTimerRef.current = null;
+                }
+              }}
+              aria-label={`Ver detalhes do Easter Egg ${eggToast.egg.name}`}
+              className="relative w-full text-left px-4 py-3.5 pr-9 cursor-pointer focus:outline-none"
+            >
+              <div className="flex items-start gap-3">
+                <div className="relative shrink-0 pt-0.5">
+                  <motion.div
+                    aria-hidden="true"
+                    initial={{ scale: 0.8, opacity: 0.85 }}
+                    animate={{ scale: [0.85, 1.25, 1], opacity: [0.85, 0.45, 0.25] }}
+                    transition={{ duration: 1.4, ease: 'easeOut' }}
+                    className={`pointer-events-none absolute -inset-2 rounded-full blur-md ${EASTER_EGG_GLOW_STYLE[eggToast.egg.tier].auraClass}`}
+                  />
+                  <pre
+                    aria-hidden="true"
+                    className={`relative font-mono text-xs leading-tight whitespace-pre select-none ${eggToast.egg.colorClass}`}
+                  >
+                    {eggToast.egg.chars}
+                  </pre>
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex items-center gap-1.5 min-w-0">
                     <p className="text-[11px] font-mono uppercase tracking-wider text-[#4ADE80] truncate">
                       {eggToast.readOnly
@@ -1042,38 +1063,41 @@ export function EasterEggProvider({
                       {EASTER_EGG_TIER_META[eggToast.egg.tier].label}
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setEggToast(null)}
-                    aria-label="Fechar aviso"
-                    className="text-[#787D75] hover:text-[#F2F2EE] cursor-pointer shrink-0"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-                <p className="text-xs font-semibold text-[#F2F2EE]">
-                  {eggToast.egg.name}{' '}
-                  <span className="font-normal text-[#8C9288]">
-                    · {eggToast.egg.game}
-                  </span>
-                </p>
-                <p className="text-xs text-[#C7CBC4] italic">
-                  &ldquo;{eggToast.egg.quote}&rdquo;
-                </p>
-                {!eggToast.readOnly &&
-                  eggToast.newlyCollected &&
-                  eggToast.totalCount >= RETRO_EASTER_EGGS.length && (
-                    <p className="text-[11px] font-mono text-[#FDE68A] pt-0.5">
-                      50/50 completo! Badge Caçador Supremo desbloqueado no perfil.
+                  <p className="text-xs font-semibold text-[#F2F2EE]">
+                    {eggToast.egg.name}{' '}
+                    <span className="font-normal text-[#8C9288]">
+                      · {eggToast.egg.game}
+                    </span>
+                  </p>
+                  <p className="text-xs text-[#C7CBC4] italic">
+                    &ldquo;{eggToast.egg.quote}&rdquo;
+                  </p>
+                  {!eggToast.readOnly &&
+                    eggToast.newlyCollected &&
+                    eggToast.totalCount >= RETRO_EASTER_EGGS.length && (
+                      <p className="text-[11px] font-mono text-[#FDE68A] pt-0.5">
+                        50/50 completo! Badge Caçador Supremo desbloqueado no perfil.
+                      </p>
+                    )}
+                  {eggToast.readOnly && (
+                    <p className="text-[11px] text-[#8C9288]">
+                      Entre com sua conta para salvar a coleção no perfil.
                     </p>
                   )}
-                {eggToast.readOnly && (
-                  <p className="text-[11px] text-[#8C9288]">
-                    Entre com sua conta para salvar a coleção no perfil.
+                  <p className="text-[10px] font-mono text-[#787D75] pt-0.5">
+                    Clique para ver detalhes
                   </p>
-                )}
+                </div>
               </div>
-            </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setEggToast(null)}
+              aria-label="Fechar aviso"
+              className="absolute top-3 right-3 text-[#787D75] hover:text-[#F2F2EE] cursor-pointer p-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1152,6 +1176,19 @@ export function EasterEggProvider({
           </div>
         </div>
       )}
+
+      <EasterEggDetailModal
+        egg={toastDetailEgg}
+        onClose={() => setToastDetailEgg(null)}
+        onRemove={
+          isDungeonMasterUser(user, profile)
+            ? async (eggId) => {
+                await removeEasterEgg(eggId);
+                setToastDetailEgg(null);
+              }
+            : undefined
+        }
+      />
     </EasterEggContext.Provider>
   );
 }
