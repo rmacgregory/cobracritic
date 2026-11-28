@@ -260,10 +260,13 @@ export function MembersView({
                       aria-label="Badge do usuário"
                       className="inline-flex items-center rounded-md border border-[#2C312C] bg-[#0C0D0C] p-0.5 gap-0.5"
                     >
-                      {(['cobra', 'guest'] as MemberBadge[]).map((badgeOption) => {
+                      {(['cobra', 'guest', 'lango'] as MemberBadge[]).map((badgeOption) => {
                         const meta = MEMBER_BADGE_META[badgeOption];
                         const currentBadge: MemberBadge =
-                          activeMember.memberBadge === 'guest' ? 'guest' : 'cobra';
+                          activeMember.memberBadge === 'guest' ||
+                          activeMember.memberBadge === 'lango'
+                            ? activeMember.memberBadge
+                            : 'cobra';
                         const isSelected = currentBadge === badgeOption;
                         return (
                           <button

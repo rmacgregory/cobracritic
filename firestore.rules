@@ -134,7 +134,7 @@ service cloud.firestore {
         isValidTopFiveGames(data.topFiveGames) &&
         (!('favoriteGenre' in data) || (data.favoriteGenre is string && data.favoriteGenre.size() <= 40)) &&
         (!('notificationPreferences' in data) || isValidNotificationPreferences(data.notificationPreferences)) &&
-        (!('memberBadge' in data) || (data.memberBadge is string && data.memberBadge in ['cobra', 'guest'])) &&
+        (!('memberBadge' in data) || (data.memberBadge is string && data.memberBadge in ['cobra', 'guest', 'lango'])) &&
         data.visibility is string && data.visibility == 'group' &&
         data.createdAt is timestamp &&
         data.updatedAt is timestamp;

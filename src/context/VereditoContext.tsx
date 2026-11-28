@@ -2248,7 +2248,8 @@ export function VereditoProvider({ children }: { children: React.ReactNode }) {
     if (!user || !isAdmin) {
       throw new Error('Apenas administradores podem alterar a badge de um membro.');
     }
-    const safeBadge: MemberBadge = badge === 'guest' ? 'guest' : 'cobra';
+    const safeBadge: MemberBadge =
+      badge === 'guest' || badge === 'lango' ? badge : 'cobra';
     const path = `users/${targetUid}`;
     try {
       await updateDoc(doc(db, 'users', targetUid), {

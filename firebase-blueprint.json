@@ -38,8 +38,8 @@
         },
         "memberBadge": {
           "type": "string",
-          "enum": ["cobra", "guest"],
-          "description": "Admin-managed user badge differentiating 'cobra' (Membro dos Cobras) from 'guest' (Convidado). Defaults to 'cobra' when omitted."
+          "enum": ["cobra", "guest", "lango"],
+          "description": "Admin-managed user badge differentiating 'cobra' (Membro dos Cobras), 'guest' (Convidado), and 'lango' (Lango). Defaults to 'cobra' when omitted."
         },
         "visibility": {
           "type": "string",

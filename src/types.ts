@@ -167,7 +167,7 @@ export function resolveNotificationPreferences(
   };
 }
 
-export type MemberBadge = 'cobra' | 'guest';
+export type MemberBadge = 'cobra' | 'guest' | 'lango';
 
 export const MEMBER_BADGE_META: Record<
   MemberBadge,
@@ -193,10 +193,20 @@ export const MEMBER_BADGE_META: Record<
     pillClass: 'text-[#93C5FD] bg-[#121D2D] border-[#2A4C7C]',
     activeButtonClass: 'bg-[#121D2D] border-[#2A4C7C] text-[#93C5FD]',
   },
+  lango: {
+    label: 'Lango',
+    shortLabel: 'Lango',
+    textClass: 'text-[#FBBF24]',
+    pillClass: 'text-[#FDE68A] bg-[#261E0F] border-[#66511D]',
+    activeButtonClass: 'bg-[#261E0F] border-[#66511D] text-[#FDE68A]',
+  },
 };
 
 export function getMemberBadgeMeta(badge?: MemberBadge | null) {
-  return MEMBER_BADGE_META[badge === 'guest' ? 'guest' : 'cobra'];
+  if (badge === 'guest' || badge === 'lango') {
+    return MEMBER_BADGE_META[badge];
+  }
+  return MEMBER_BADGE_META.cobra;
 }
 
 export interface UserProfile {
